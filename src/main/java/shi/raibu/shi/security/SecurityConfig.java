@@ -16,18 +16,18 @@ public class SecurityConfig {
 
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    http
-        .csrf(csrf -> csrf
-            .ignoringRequestMatchers("/ws/**"))
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/ping", "/actuator/**").permitAll()
-            .anyRequest().authenticated())
-        .oauth2Login(oauth2 -> oauth2
-            .userInfoEndpoint(userInfo -> userInfo
-                .oidcUserService(customOidcUserService)))
-        .logout(logout -> logout
-            .logoutUrl("/logout")
-            .logoutSuccessUrl("/"));
+    http.csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers("/ping", "/actuator/**")
+                    .permitAll()
+                    .anyRequest()
+                    .authenticated())
+        .oauth2Login(
+            oauth2 ->
+                oauth2.userInfoEndpoint(
+                    userInfo -> userInfo.oidcUserService(customOidcUserService)))
+        .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl("/"));
 
     return http.build();
   }

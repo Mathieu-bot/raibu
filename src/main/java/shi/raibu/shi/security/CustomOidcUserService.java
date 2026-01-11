@@ -4,9 +4,9 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;
-import org.springframework.security.oauth2.core.oidc.user.OidcUser;
-import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserService;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.stereotype.Service;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
@@ -28,20 +28,22 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
     String name = oidcUser.getFullName();
     String picture = oidcUser.getPicture();
 
-    User user = userRepository
-        .findByProviderAndProviderId(provider, providerId)
-        .orElseGet(() ->
-            User.builder()
-                .provider(provider)
-                .providerId(providerId)
-                .email(email)
-                .displayName(name)
-                .avatarUrl(picture)
-                .status(User.UserStatus.IDLE)
-                .createdAt(Instant.now())
-                .lastActiveAt(Instant.now())
-                .banned(false)
-                .build());
+    User user =
+        userRepository
+            .findByProviderAndProviderId(provider, providerId)
+            .orElseGet(
+                () ->
+                    User.builder()
+                        .provider(provider)
+                        .providerId(providerId)
+                        .email(email)
+                        .displayName(name)
+                        .avatarUrl(picture)
+                        .status(User.UserStatus.IDLE)
+                        .createdAt(Instant.now())
+                        .lastActiveAt(Instant.now())
+                        .banned(false)
+                        .build());
 
     user.setEmail(email);
     user.setDisplayName(name);
