@@ -8,7 +8,8 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
-import shi.raibu.shi.repository.model.User;
+
+import shi.raibu.shi.model.User;
 import shi.raibu.shi.service.MatchmakingService;
 import shi.raibu.shi.websocket.model.SignalMessage;
 

@@ -8,10 +8,11 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import shi.raibu.shi.model.ChatSession;
+import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
-import shi.raibu.shi.repository.model.ChatSession;
-import shi.raibu.shi.repository.model.User;
 
 @Service
 @AllArgsConstructor
