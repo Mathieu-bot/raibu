@@ -17,7 +17,17 @@ public class User {
 
   private String username;
 
-  private String sessionId; 
+  private String sessionId;
+
+  private String provider;
+
+  private String providerId;
+
+  private String email;
+
+  private String displayName;
+
+  private String avatarUrl;
 
   @Enumerated(EnumType.STRING)
   private UserStatus status;
@@ -28,8 +38,8 @@ public class User {
   private boolean banned;
 
   public enum UserStatus {
-    IDLE, 
-    SEARCHING, 
+    IDLE,
+    SEARCHING,
     IN_CHAT,
     OFFLINE
   }
