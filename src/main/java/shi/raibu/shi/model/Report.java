@@ -15,9 +15,9 @@ public class Report {
   @GeneratedValue(strategy = GenerationType.UUID)
   private String id;
 
-  private String reporterId; 
-  private String reportedUserId; 
-  private String sessionId; 
+  private String reporterId;
+  private String reportedUserId;
+  private String sessionId;
 
   @Enumerated(EnumType.STRING)
   private ReportReason reason;
