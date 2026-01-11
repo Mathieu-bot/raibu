@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: raibu
+  
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/raibu}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+server:
+  port: ${PORT:8080}
+
+# for WebSocket
+cors:
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,https://raibu.app}
