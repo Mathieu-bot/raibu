@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: raibu-db
+    environment:
+      POSTGRES_DB: raibu
+      POSTGRES_USER: raibu_admin
+      POSTGRES_PASSWORD: raibu_password
+    ports:
+      - "55432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: raibu-app
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/raibu
+      DATABASE_USERNAME: raibu_admin
+      DATABASE_PASSWORD: raibu_password
+      PORT: 8080
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  db_data:
