@@ -1,0 +1,59 @@
+# ============================================
+# Docker ignore file
+# Excludes unnecessary files from the Docker build context
+# This speeds up the build process and reduces image size
+# ============================================
+
+# Gradle build outputs
+build/
+.gradle/
+!gradle/wrapper/
+
+# IDE-specific files
+.idea/
+*.iml
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Git files (not needed in Docker image)
+.git/
+.gitignore
+.gitattributes
+
+# Documentation and markdown files
+*.md
+README.md
+docs/
+doc/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Test outputs
+*.test
+
+# Environment files (secrets should not be in the image)
+.env
+.env.*
+
+# Infrastructure files (not needed in runtime image)
+infrastructure/
+terraform/
+*.tf
+*.tfvars
+
+# GitHub workflows
+.github/
