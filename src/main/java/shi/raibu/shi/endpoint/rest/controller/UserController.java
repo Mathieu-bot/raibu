@@ -4,7 +4,6 @@ import java.time.Instant;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
 
