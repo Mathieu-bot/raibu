@@ -28,6 +28,18 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
     String name = oidcUser.getFullName();
     String picture = oidcUser.getPicture();
 
+    Object localeAttr = oidcUser.getAttributes().get("locale");
+    String tmpCountryCode = null;
+    if (localeAttr instanceof String locale) {
+      String[] parts = locale.split("[-_]");
+      if (parts.length == 1) {
+        tmpCountryCode = parts[0].toUpperCase();
+      } else {
+        tmpCountryCode = parts[parts.length - 1].toUpperCase();
+      }
+    }
+    final String countryCode = tmpCountryCode;
+
     User user =
         userRepository
             .findByProviderAndProviderId(provider, providerId)
@@ -39,6 +51,7 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
                         .email(email)
                         .displayName(name)
                         .avatarUrl(picture)
+                        .countryCode(countryCode)
                         .status(User.UserStatus.IDLE)
                         .createdAt(Instant.now())
                         .lastActiveAt(Instant.now())
@@ -49,9 +62,10 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
     user.setDisplayName(name);
     user.setAvatarUrl(picture);
     user.setLastActiveAt(Instant.now());
+    user.setCountryCode(countryCode);
 
     userRepository.save(user);
 
-    return oidcUser;
+    return new AppOidcUser(user.getId(), oidcUser);
   }
 }
