@@ -29,6 +29,8 @@ public class User {
 
   private String avatarUrl;
 
+  private String countryCode;
+
   @Enumerated(EnumType.STRING)
   private UserStatus status;
 
