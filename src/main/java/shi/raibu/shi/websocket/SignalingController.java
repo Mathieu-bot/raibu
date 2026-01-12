@@ -1,5 +1,6 @@
 package shi.raibu.shi.websocket;
 
+import java.security.Principal;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,12 +22,17 @@ public class SignalingController {
 
   /** Search for a random match */
   @MessageMapping("/search")
-  public void searchForMatch(@Payload String userId, SimpMessageHeaderAccessor headerAccessor) {
-    String sessionId = headerAccessor.getSessionId();
+  public void searchForMatch(Principal principal, SimpMessageHeaderAccessor headerAccessor) {
+    String userId = principal.getName();
+    String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
     log.info("User {} searching for match (session: {})", userId, sessionId);
 
     matchmakingService.startSearching(userId);
 
+    handleMatchForUser(userId);
+  }
+
+  private void handleMatchForUser(String userId) {
     Optional<User> match = matchmakingService.findRandomMatch(userId);
 
     if (match.isPresent()) {
@@ -67,17 +73,19 @@ public class SignalingController {
 
   /** Skip to the next user ("Next" button) */
   @MessageMapping("/next")
-  public void nextUser(@Payload String userId) {
+  public void nextUser(Principal principal) {
+    String userId = principal.getName();
     log.info("User {} wants to skip to next", userId);
 
     matchmakingService.endChat(userId);
 
-    searchForMatch(userId, null);
+    handleMatchForUser(userId);
   }
 
   /** Stop searching */
   @MessageMapping("/stop")
-  public void stopSearching(@Payload String userId) {
+  public void stopSearching(Principal principal) {
+    String userId = principal.getName();
     log.info("User {} stopped searching", userId);
     matchmakingService.stopSearching(userId);
   }
