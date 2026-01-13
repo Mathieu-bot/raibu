@@ -51,6 +51,7 @@ public class Notification {
   public enum NotificationType {
     USER_BANNED,
     USER_UNBANNED,
-    REPORT_ACTIONED
+    REPORT_ACTIONED,
+    MATCH_CONFIRMED
   }
 }
