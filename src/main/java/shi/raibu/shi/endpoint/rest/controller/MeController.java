@@ -188,7 +188,10 @@ public class MeController {
     if (values == null || values.isEmpty()) {
       return null;
     }
-    return values.stream().map(String::trim).filter(v -> !v.isEmpty()).collect(Collectors.joining(","));
+    return values.stream()
+        .map(String::trim)
+        .filter(v -> !v.isEmpty())
+        .collect(Collectors.joining(","));
   }
 
   private static List<String> splitCsv(String value) {

@@ -39,8 +39,7 @@ public class User {
 
   private String preferredGenders;
 
-  @Builder.Default
-  private Boolean preferSameCountry = true;
+  @Builder.Default private Boolean preferSameCountry = true;
 
   @Enumerated(EnumType.STRING)
   private UserStatus status;
