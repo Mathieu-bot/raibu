@@ -17,6 +17,7 @@ import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.NotificationService;
+import shi.raibu.shi.service.ReputationService;
 
 @RestController
 @RequestMapping("/admin")
@@ -27,6 +28,7 @@ public class AdminModerationController {
   private final UserRepository userRepository;
   private final ChatSessionRepository chatSessionRepository;
   private final NotificationService notificationService;
+  private final ReputationService reputationService;
 
   @GetMapping("/reports")
   public ResponseEntity<List<Report>> getReports(Report.ReportStatus status) {
@@ -50,6 +52,11 @@ public class AdminModerationController {
             report -> {
               report.setStatus(request.status());
               reportRepository.save(report);
+
+              if (request.status() == ReportStatus.ACTIONED
+                  && report.getReportedUserId() != null) {
+                reputationService.registerActionedReport(report.getReportedUserId());
+              }
 
               if (request.status() == ReportStatus.ACTIONED && report.getReporterId() != null) {
                 String dataJson = String.format("{\"reportId\":\"%s\"}", report.getId());
@@ -84,6 +91,7 @@ public class AdminModerationController {
               userRepository.save(user);
 
               if (!wasBanned && nowBanned) {
+                reputationService.registerBan(userId);
                 notificationService.notifyUser(
                     userId, NotificationType.USER_BANNED, "Your account has been banned.", null);
               } else if (wasBanned && !nowBanned) {
