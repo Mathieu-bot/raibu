@@ -49,6 +49,28 @@ Returns the text messages exchanged in a given chat session. Only participants o
   - `403` – user is not a participant of the session
   - `404` – session not found
 
+### `POST /sessions/{sessionId}/feedback`
+
+Submits simple feedback (like / dislike) for a given session. Only participants of the session can submit feedback.
+
+- **Method**: `POST`
+- **Auth**: required
+- **Path params**:
+  - `sessionId`: ID of the `ChatSession`.
+- **Body (JSON)**:
+  ```json
+  {
+    "liked": true
+  }
+  ```
+- **Responses**:
+  - `200` – feedback recorded (idempotent if the user already submitted feedback for this session).
+  - `401` – unauthenticated.
+  - `403` – user is not a participant of the session.
+  - `404` – session not found.
+
+Internally, this feedback is used to maintain a simple reputation signal for users (positive/negative experiences, strikes) and will also be reused for mutual matches / friends features.
+
 ### `PUT /me/country`
 
 Allows the authenticated user to update their preferred country.
@@ -132,6 +154,25 @@ Returns the chat session history for the currently authenticated user.
     }
   ]
   ```
+
+### `GET /friends`
+
+Returns the list of friends (mutual matches) for the currently authenticated user.
+
+- **Method**: `GET`
+- **Auth**: required
+- **200 response** (example):
+  ```json
+  [
+    {
+      "userId": "other-user-id",
+      "createdAt": "2024-01-01T12:34:56Z"
+    }
+  ]
+  ```
+- **Notes**:
+  - A friendship is created when **both** participants of a `ChatSession` submit `liked = true` feedback.
+  - When a friendship is created, both users receive a `MATCH_CONFIRMED` notification.
 
 ## Health / utilities
 
