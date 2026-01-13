@@ -426,7 +426,7 @@ Marks a specific notification as read for the authenticated user.
   ```json
   {
     "id": "string",
-    "type": "REPORT_ACTIONED",      // USER_BANNED | USER_UNBANNED | REPORT_ACTIONED
+    "type": "REPORT_ACTIONED",      // USER_BANNED | USER_UNBANNED | REPORT_ACTIONED | MATCH_CONFIRMED
     "message": "One of your reports has been processed.",
     "data": "{\"reportId\":\"...\"}",
     "createdAt": "2024-01-01T12:34:56Z",
@@ -451,5 +451,6 @@ Currently, the backend emits notifications for the following events:
 - **Auto-ban after multiple reports** (when a user reaches the report threshold and is auto-banned):
   - Type: `USER_BANNED`.
   - Message: `"Your account has been banned due to multiple reports."`.
+  - For mutual matches / friends, a `MATCH_CONFIRMED` notification is emitted with a message like `"You have a new mutual match."` and `data` containing a small JSON with `friendId`.
 
 The frontend can rely on these notifications (via WebSocket or the REST list) to display in-app banners, toasts, or badges when important moderation-related events happen.
