@@ -305,6 +305,57 @@ paths:
         '404':
           description: User not found
 
+  /notifications:
+    get:
+      summary: List notifications for current user
+      description: Returns notifications for the authenticated user, optionally filtered by unread status.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: query
+          name: unread
+          required: false
+          schema:
+            type: boolean
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NotificationPayload'
+        '401':
+          description: Not authenticated
+
+  /notifications/{notificationId}/read:
+    put:
+      summary: Mark notification as read
+      description: Marks a specific notification as read for the authenticated user.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: path
+          name: notificationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Marked as read
+        '401':
+          description: Not authenticated
+        '404':
+          description: Notification not found
+
 components:
   securitySchemes:
     googleOAuth:
@@ -588,3 +639,28 @@ components:
           type: boolean
         gender:
           type: string
+
+    NotificationPayload:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        message:
+          type: string
+        data:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+
+    NotificationType:
+      type: string
+      enum:
+        - USER_BANNED
+        - USER_UNBANNED
+        - REPORT_ACTIONED
