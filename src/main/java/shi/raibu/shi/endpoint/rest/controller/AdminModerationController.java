@@ -53,8 +53,7 @@ public class AdminModerationController {
               report.setStatus(request.status());
               reportRepository.save(report);
 
-              if (request.status() == ReportStatus.ACTIONED
-                  && report.getReportedUserId() != null) {
+              if (request.status() == ReportStatus.ACTIONED && report.getReportedUserId() != null) {
                 reputationService.registerActionedReport(report.getReportedUserId());
               }
 

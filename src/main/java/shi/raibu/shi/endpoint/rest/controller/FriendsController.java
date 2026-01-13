@@ -27,8 +27,7 @@ public class FriendsController {
 
     String userId = principal.getName();
 
-    List<Friendship> friendships =
-        friendshipRepository.findByUserId1OrUserId2(userId, userId);
+    List<Friendship> friendships = friendshipRepository.findByUserId1OrUserId2(userId, userId);
 
     List<FriendResponse> friends =
         friendships.stream()

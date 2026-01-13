@@ -31,9 +31,11 @@ public class IcebreakerService {
                   "Do you remember the first game that really hooked you?"),
           "coworking",
               List.of(
-                  "What are you working on today, and what would make this session feel productive?",
+                  "What are you working on today, and what would make this session feel"
+                      + " productive?",
                   "What's one small task you want to finish during this coworking time?",
-                  "What usually helps you stay focused when you work (music, silence, snacks, etc.)?"),
+                  "What usually helps you stay focused when you work (music, silence, snacks,"
+                      + " etc.)?"),
           "travel",
               List.of(
                   "If you could take a short weekend trip, where would you love to go?",

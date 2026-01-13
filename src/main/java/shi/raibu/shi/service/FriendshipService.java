@@ -42,23 +42,15 @@ public class FriendshipService {
       String dataJsonForB = String.format("{\"friendId\":\"%s\"}", userIdA);
 
       notificationService.notifyUser(
-          userIdA,
-          NotificationType.MATCH_CONFIRMED,
-          "You have a new mutual match.",
-          dataJsonForA);
+          userIdA, NotificationType.MATCH_CONFIRMED, "You have a new mutual match.", dataJsonForA);
       notificationService.notifyUser(
-          userIdB,
-          NotificationType.MATCH_CONFIRMED,
-          "You have a new mutual match.",
-          dataJsonForB);
+          userIdB, NotificationType.MATCH_CONFIRMED, "You have a new mutual match.", dataJsonForB);
 
       return saved;
     } catch (DataIntegrityViolationException e) {
       log.warn("Friendship already exists between {} and {}", user1, user2, e);
       // In case of race condition, load the existing one.
-      return friendshipRepository
-          .findByUserId1AndUserId2(user1, user2)
-          .orElseThrow(() -> e);
+      return friendshipRepository.findByUserId1AndUserId2(user1, user2).orElseThrow(() -> e);
     }
   }
 }
