@@ -354,7 +354,6 @@ Ban or unban a user.
     }
     ```
   - Icebreakers depend on the selected `mode` when provided (e.g. different friendly questions for `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movies_series`, `food`, `study`, etc.).
-
 - **Banned users**:
   - When a banned user tries to search or go to the next user, the backend will not start matchmaking.
   - Instead, it sends an `ERROR` `SignalMessage` on `/user/queue/match`:
