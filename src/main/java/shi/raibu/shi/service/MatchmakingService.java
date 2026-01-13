@@ -30,6 +30,10 @@ public class MatchmakingService {
     }
 
     User currentUser = currentUserOpt.get();
+    if (currentUser.isBanned()) {
+      log.info("User {} is banned and cannot be matched", userId);
+      return Optional.empty();
+    }
     String countryCode = currentUser.getCountryCode();
 
     List<User> searchingUsers =
@@ -54,8 +58,7 @@ public class MatchmakingService {
     User match;
     if (!sameCountry.isEmpty()) {
       match = sameCountry.get(random.nextInt(sameCountry.size()));
-      log.info(
-          "Matching user {} with {} from same country {}", userId, match.getId(), countryCode);
+      log.info("Matching user {} with {} from same country {}", userId, match.getId(), countryCode);
     } else {
       match = searchingUsers.get(random.nextInt(searchingUsers.size()));
       log.info("Matching user {} with {} from any country", userId, match.getId());
@@ -109,6 +112,10 @@ public class MatchmakingService {
             .status(ChatSession.SessionStatus.ACTIVE)
             .build();
     chatSessionRepository.save(session);
+  }
+
+  public boolean isUserBanned(String userId) {
+    return userRepository.findById(userId).map(User::isBanned).orElse(false);
   }
 
   private void updateUserStatus(String userId, User.UserStatus status) {
