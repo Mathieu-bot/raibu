@@ -277,8 +277,14 @@ Ban or unban a user.
 ### Main STOMP flow
 
 - **Search for a match**:
-  - Client sends an empty message (payload is ignored) to destination: `/app/search`.
-  - The backend uses the authenticated user (ID from Google) as `userId`.
+  - Client sends a message to destination: `/app/search`.
+  - Payload can be empty (for fully random mode) or include an optional `mode` field:
+    ```json
+    {
+      "mode": "english_practice" // or "gaming", "coworking", etc.
+    }
+    ```
+  - The backend uses the authenticated user (ID from Google) as `userId` and remembers the selected `searchMode` while the user is searching / skipping.
 
 - **Receive a match**:
   - Subscribe to `/user/queue/match`.
@@ -336,6 +342,18 @@ Ban or unban a user.
       }
     }
     ```
+
+- **Icebreakers**:
+  - After a match is established, the backend may send an optional `ICEBREAKER` `SignalMessage` on `/user/queue/match` to both users, containing a simple question to help start the conversation:
+    ```json
+    {
+      "type": "ICEBREAKER",
+      "from": "system",
+      "to": "<userId>",
+      "data": "If you could travel tomorrow, where would you go?"
+    }
+    ```
+  - Icebreakers can depend on the selected `mode` (e.g. different questions for `english_practice` vs `gaming`).
 
 - **Banned users**:
   - When a banned user tries to search or go to the next user, the backend will not start matchmaking.
