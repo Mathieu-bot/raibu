@@ -34,6 +34,10 @@ public class MatchmakingService {
     }
 
     User currentUser = currentUserOpt.get();
+    if (currentUser.isBanned()) {
+      log.info("User {} is banned and cannot be matched", userId);
+      return Optional.empty();
+    }
     String countryCode = currentUser.getCountryCode();
 
     List<User> searchingUsers =
