@@ -35,10 +35,10 @@ paths:
         - Search for a match:
           - Client sends to `/app/search`.
           - Optional JSON payload:
-            `{ "mode": "english_practice" }` (or other modes like `gaming`, `coworking`, etc.).
+            `{ "mode": "english_practice" }` (or other modes like `gaming`, `coworking`, `travel`, `music`, `movies_series`, `food`, `study`, etc.).
         - Receive a match:
           - Subscribe to `/user/queue/match`.
-          - Backend sends `MATCH_FOUND` messages and may also send an `ICEBREAKER` message containing a short question to help start the conversation.
+          - Backend sends `MATCH_FOUND` messages and may also send an `ICEBREAKER` message containing a short, friendly question (potentially adapted to the selected mode) to help start the conversation.
       responses:
         '101':
           description: WebSocket protocol upgrade (during normal operation)
