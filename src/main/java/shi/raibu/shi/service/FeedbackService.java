@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.SessionFeedback;
 import shi.raibu.shi.repository.SessionFeedbackRepository;
-import shi.raibu.shi.service.FriendshipService;
 
 @Service
 @AllArgsConstructor
