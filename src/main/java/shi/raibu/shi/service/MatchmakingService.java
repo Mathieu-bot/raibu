@@ -196,4 +196,8 @@ public class MatchmakingService {
               userRepository.save(user);
             });
   }
+
+  public boolean isUserBanned(String userId) {
+    return userRepository.findById(userId).map(User::isBanned).orElse(false);
+  }
 }
