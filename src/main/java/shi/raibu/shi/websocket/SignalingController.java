@@ -15,9 +15,12 @@ import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatMessageRepository;
 import shi.raibu.shi.repository.ChatSessionRepository;
+import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.service.IcebreakerService;
 import shi.raibu.shi.service.MatchmakingService;
 import shi.raibu.shi.websocket.model.ChatInboundMessage;
 import shi.raibu.shi.websocket.model.ChatMessagePayload;
+import shi.raibu.shi.websocket.model.SearchRequest;
 import shi.raibu.shi.websocket.model.SignalMessage;
 
 @Controller
@@ -28,6 +31,8 @@ public class SignalingController {
   private final MatchmakingService matchmakingService;
   private final ChatSessionRepository chatSessionRepository;
   private final ChatMessageRepository chatMessageRepository;
+  private final UserRepository userRepository;
+  private final IcebreakerService icebreakerService;
 
   private void sendErrorToUser(String userId, String code) {
     SignalMessage error =
@@ -42,10 +47,14 @@ public class SignalingController {
 
   /** Search for a random match */
   @MessageMapping("/search")
-  public void searchForMatch(Principal principal, SimpMessageHeaderAccessor headerAccessor) {
+  public void searchForMatch(
+      Principal principal,
+      @Payload(required = false) SearchRequest request,
+      SimpMessageHeaderAccessor headerAccessor) {
     String userId = principal.getName();
     String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
-    log.info("User {} searching for match (session: {})", userId, sessionId);
+    String mode = request != null ? request.getMode() : null;
+    log.info("User {} searching for match (session: {}, mode: {})", userId, sessionId, mode);
 
     if (matchmakingService.isUserBanned(userId)) {
       log.info("Blocked banned user {} from searching for match", userId);
@@ -53,7 +62,7 @@ public class SignalingController {
       return;
     }
 
-    matchmakingService.startSearching(userId);
+    matchmakingService.startSearching(userId, mode);
 
     handleMatchForUser(userId);
   }
@@ -86,6 +95,36 @@ public class SignalingController {
           matchedUser.getId(), "/queue/match", matchMessageForPeer);
 
       log.info("Match established between {} and {}", userId, matchedUser.getId());
+
+      // Send an icebreaker prompt to both users, based on the current user's search mode.
+      userRepository
+          .findById(userId)
+          .map(User::getSearchMode)
+          .ifPresent(
+              mode -> {
+                String question = icebreakerService.getRandom(mode);
+                if (question != null && !question.isBlank()) {
+                  SignalMessage icebreakerForUser =
+                      SignalMessage.builder()
+                          .type(SignalMessage.SignalType.ICEBREAKER)
+                          .from("system")
+                          .to(userId)
+                          .data(question)
+                          .build();
+
+                  SignalMessage icebreakerForPeer =
+                      SignalMessage.builder()
+                          .type(SignalMessage.SignalType.ICEBREAKER)
+                          .from("system")
+                          .to(matchedUser.getId())
+                          .data(question)
+                          .build();
+
+                  messagingTemplate.convertAndSendToUser(userId, "/queue/match", icebreakerForUser);
+                  messagingTemplate.convertAndSendToUser(
+                      matchedUser.getId(), "/queue/match", icebreakerForPeer);
+                }
+              });
     }
   }
 
