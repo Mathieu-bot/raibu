@@ -52,6 +52,34 @@ paths:
         '401':
           description: Not authenticated
 
+  /sessions/{sessionId}/messages:
+    get:
+      summary: Get messages for a session
+      description: Returns text chat messages for a given session. Only participants of the session can access the messages.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of chat messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessage'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Forbidden (not a participant)
+        '404':
+          description: Session not found
+
   /me/country:
     put:
       summary: Update current user country
@@ -490,6 +518,34 @@ components:
       properties:
         banned:
           type: boolean
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        senderId:
+          type: string
+        content:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
+
+    ChatMessagePayload:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        senderId:
+          type: string
+        content:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
 
     MePreferencesResponse:
       type: object

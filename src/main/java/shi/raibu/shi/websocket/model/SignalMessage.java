@@ -13,7 +13,7 @@ public class SignalMessage {
   private SignalType type;
   private String from;
   private String to;
-  private Object data; // SDP offer/answer or ICE candidate
+  private Object data; // SDP offer/answer, ICE candidate, or chat payload
 
   public enum SignalType {
     OFFER,
@@ -21,6 +21,7 @@ public class SignalMessage {
     ICE_CANDIDATE,
     MATCH_FOUND,
     PEER_DISCONNECTED,
+    CHAT_TEXT,
     ERROR
   }
 }

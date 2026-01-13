@@ -24,6 +24,31 @@ Returns the currently authenticated user (via Google OAuth2).
   }
   ```
 
+### `GET /sessions/{sessionId}/messages`
+
+Returns the text messages exchanged in a given chat session. Only participants of the session can access the messages.
+
+- **Method**: `GET`
+- **Auth**: required
+- **Path params**:
+  - `sessionId`: ID of the `ChatSession`
+- **Responses**:
+  - `200` – array of `ChatMessage`:
+    ```json
+    [
+      {
+        "id": "string",
+        "sessionId": "string",
+        "senderId": "string",
+        "content": "Hi there!",
+        "sentAt": "2024-01-01T12:00:10Z"
+      }
+    ]
+    ```
+  - `401` – unauthenticated
+  - `403` – user is not a participant of the session
+  - `404` – session not found
+
 ### `PUT /me/country`
 
 Allows the authenticated user to update their preferred country.
@@ -243,6 +268,33 @@ Ban or unban a user.
     }
     ```
   - The backend relays to `/user/queue/signal` for the recipient.
+
+- **Text chat during a session**:
+  - The client can send text messages while the video chat is running.
+  - **Send**: `/app/chat` with a `ChatInboundMessage`:
+    ```json
+    {
+      "to": "<otherUserId>",
+      "content": "Hello!"
+    }
+    ```
+  - The backend checks:
+    - sender is not banned,
+    - there is an active `ChatSession` between the two users.
+  - Messages are persisted as `ChatMessage` rows and broadcast as `SignalMessage` on `/user/queue/chat` for **both** users:
+    ```json
+    {
+      "type": "CHAT_TEXT",
+      "from": "<senderId>",
+      "to": "<recipientId>",
+      "data": {
+        "sessionId": "<sessionId>",
+        "senderId": "<senderId>",
+        "content": "Hello!",
+        "sentAt": "2024-01-01T12:00:10Z"
+      }
+    }
+    ```
 
 - **Banned users**:
   - When a banned user tries to search or go to the next user, the backend will not start matchmaking.

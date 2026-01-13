@@ -1,6 +1,7 @@
 package shi.raibu.shi.websocket;
 
 import java.security.Principal;
+import java.time.Instant;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,8 +10,14 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import shi.raibu.shi.model.ChatMessage;
+import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.User;
+import shi.raibu.shi.repository.ChatMessageRepository;
+import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.service.MatchmakingService;
+import shi.raibu.shi.websocket.model.ChatInboundMessage;
+import shi.raibu.shi.websocket.model.ChatMessagePayload;
 import shi.raibu.shi.websocket.model.SignalMessage;
 
 @Controller
@@ -19,6 +26,8 @@ import shi.raibu.shi.websocket.model.SignalMessage;
 public class SignalingController {
   private final SimpMessagingTemplate messagingTemplate;
   private final MatchmakingService matchmakingService;
+  private final ChatSessionRepository chatSessionRepository;
+  private final ChatMessageRepository chatMessageRepository;
 
   private void sendErrorToUser(String userId, String code) {
     SignalMessage error =
@@ -86,6 +95,82 @@ public class SignalingController {
     log.info("Signal {} from {} to {}", message.getType(), message.getFrom(), message.getTo());
 
     messagingTemplate.convertAndSendToUser(message.getTo(), "/queue/signal", message);
+  }
+
+  /** Send text chat message during an active session */
+  @MessageMapping("/chat")
+  public void sendChatMessage(Principal principal, @Payload ChatInboundMessage inbound) {
+    String senderId = principal.getName();
+    String recipientId = inbound.getTo();
+    log.info("Chat message from {} to {}", senderId, recipientId);
+
+    if (recipientId == null || recipientId.isBlank()) {
+      log.warn("Ignoring chat message from {} with no recipient", senderId);
+      return;
+    }
+
+    if (matchmakingService.isUserBanned(senderId)) {
+      log.info("Blocked banned user {} from sending chat message", senderId);
+      sendErrorToUser(senderId, "USER_BANNED");
+      return;
+    }
+
+    Optional<ChatSession> sessionOpt =
+        chatSessionRepository
+            .findByUser1IdAndUser2IdAndStatus(
+                senderId, recipientId, ChatSession.SessionStatus.ACTIVE)
+            .or(
+                () ->
+                    chatSessionRepository.findByUser1IdAndUser2IdAndStatus(
+                        recipientId, senderId, ChatSession.SessionStatus.ACTIVE));
+
+    if (sessionOpt.isEmpty()) {
+      log.info("No active session between {} and {} for chat", senderId, recipientId);
+      sendErrorToUser(senderId, "NO_ACTIVE_SESSION");
+      return;
+    }
+
+    ChatSession session = sessionOpt.get();
+
+    String content = inbound.getContent();
+    if (content == null) {
+      log.warn("Ignoring empty chat message from {}", senderId);
+      return;
+    }
+    content = content.trim();
+    if (content.isEmpty()) {
+      log.warn("Ignoring blank chat message from {}", senderId);
+      return;
+    }
+
+    Instant now = Instant.now();
+    ChatMessage chatMessage =
+        ChatMessage.builder()
+            .sessionId(session.getId())
+            .senderId(senderId)
+            .content(content)
+            .sentAt(now)
+            .build();
+    chatMessageRepository.save(chatMessage);
+
+    ChatMessagePayload payload =
+        ChatMessagePayload.builder()
+            .sessionId(session.getId())
+            .senderId(senderId)
+            .content(content)
+            .sentAt(now)
+            .build();
+
+    SignalMessage outgoing =
+        SignalMessage.builder()
+            .type(SignalMessage.SignalType.CHAT_TEXT)
+            .from(senderId)
+            .to(recipientId)
+            .data(payload)
+            .build();
+
+    messagingTemplate.convertAndSendToUser(recipientId, "/queue/chat", outgoing);
+    messagingTemplate.convertAndSendToUser(senderId, "/queue/chat", outgoing);
   }
 
   /** Skip to the next user ("Next" button) */
