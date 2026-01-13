@@ -74,6 +74,42 @@ paths:
         '404':
           description: User not found
 
+  /me/preferences:
+    get:
+      summary: Get current user preferences
+      description: Returns matchmaking-related preferences for the authenticated user.
+      security:
+        - googleOAuth: []
+      responses:
+        '200':
+          description: Current user preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MePreferencesResponse'
+        '401':
+          description: Not authenticated
+    put:
+      summary: Update current user preferences
+      description: Updates matchmaking-related preferences for the authenticated user.
+      security:
+        - googleOAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferencesRequest'
+      responses:
+        '200':
+          description: Preferences updated
+        '400':
+          description: Invalid request body
+        '401':
+          description: Not authenticated
+        '404':
+          description: User not found
+
   /sessions/me:
     get:
       summary: Get current user's chat sessions
@@ -268,7 +304,11 @@ components:
         avatarUrl:
           type: string
           format: uri
+          nullable: true
         countryCode:
+          type: string
+          nullable: true
+        gender:
           type: string
           nullable: true
         banned:
@@ -314,6 +354,21 @@ components:
           nullable: true
         countryCode:
           type: string
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+        preferredLanguages:
+          type: string
+          nullable: true
+        interests:
+          type: string
+          nullable: true
+        preferredGenders:
+          type: string
+          nullable: true
+        preferSameCountry:
+          type: boolean
           nullable: true
         status:
           $ref: '#/components/schemas/UserStatus'
@@ -435,3 +490,45 @@ components:
       properties:
         banned:
           type: boolean
+
+    MePreferencesResponse:
+      type: object
+      properties:
+        countryCode:
+          type: string
+          nullable: true
+        preferredLanguages:
+          type: array
+          items:
+            type: string
+        interests:
+          type: array
+          items:
+            type: string
+        preferredGenders:
+          type: array
+          items:
+            type: string
+        preferSameCountry:
+          type: boolean
+          nullable: true
+
+    UpdatePreferencesRequest:
+      type: object
+      properties:
+        preferredLanguages:
+          type: array
+          items:
+            type: string
+        interests:
+          type: array
+          items:
+            type: string
+        preferredGenders:
+          type: array
+          items:
+            type: string
+        preferSameCountry:
+          type: boolean
+        gender:
+          type: string
