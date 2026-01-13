@@ -47,6 +47,11 @@ public class User {
   private Instant createdAt;
   private Instant lastActiveAt;
 
+  private int reputationScore;
+  private int positiveFeedbackCount;
+  private int negativeFeedbackCount;
+  private int strikeCount;
+
   private boolean banned;
 
   public enum UserStatus {
