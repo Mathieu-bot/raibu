@@ -47,6 +47,28 @@ Allows the authenticated user to update their preferred country.
 - **Method**: `GET`
 - **Returns** full information for a user by their ID.
 
+## Sessions
+
+### `GET /sessions/me`
+
+Returns the chat session history for the currently authenticated user.
+
+- **Method**: `GET`
+- **Auth**: required
+- **200 response** (example):
+  ```json
+  [
+    {
+      "id": "string",
+      "user1Id": "string",
+      "user2Id": "string",
+      "startedAt": "2024-01-01T12:00:00Z",
+      "endedAt": "2024-01-01T12:05:00Z",
+      "status": "ENDED"
+    }
+  ]
+  ```
+
 ## Health / utilities
 
 ### `GET /ping`
@@ -182,6 +204,18 @@ Ban or unban a user.
     }
     ```
   - The backend relays to `/user/queue/signal` for the recipient.
+
+- **Banned users**:
+  - When a banned user tries to search or go to the next user, the backend will not start matchmaking.
+  - Instead, it sends an `ERROR` `SignalMessage` on `/user/queue/match`:
+    ```json
+    {
+      "type": "ERROR",
+      "from": "system",
+      "to": "<currentUserId>",
+      "data": "USER_BANNED"
+    }
+    ```
 
 ## Rate limiting (important for the frontend)
 
