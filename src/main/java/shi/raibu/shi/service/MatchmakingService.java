@@ -23,6 +23,15 @@ public class MatchmakingService {
 
   @Transactional
   public Optional<User> findRandomMatch(String userId) {
+    Optional<User> currentUserOpt = userRepository.findById(userId);
+    if (currentUserOpt.isEmpty()) {
+      log.warn("Cannot find match for non-existing user {}", userId);
+      return Optional.empty();
+    }
+
+    User currentUser = currentUserOpt.get();
+    String countryCode = currentUser.getCountryCode();
+
     List<User> searchingUsers =
         userRepository.findByStatusAndBannedFalse(User.UserStatus.SEARCHING).stream()
             .filter(user -> !user.getId().equals(userId))
@@ -32,7 +41,25 @@ public class MatchmakingService {
       return Optional.empty();
     }
 
-    User match = searchingUsers.get(random.nextInt(searchingUsers.size()));
+    List<User> sameCountry =
+        countryCode == null
+            ? List.of()
+            : searchingUsers.stream()
+                .filter(
+                    u ->
+                        u.getCountryCode() != null
+                            && u.getCountryCode().equalsIgnoreCase(countryCode))
+                .toList();
+
+    User match;
+    if (!sameCountry.isEmpty()) {
+      match = sameCountry.get(random.nextInt(sameCountry.size()));
+      log.info(
+          "Matching user {} with {} from same country {}", userId, match.getId(), countryCode);
+    } else {
+      match = searchingUsers.get(random.nextInt(searchingUsers.size()));
+      log.info("Matching user {} with {} from any country", userId, match.getId());
+    }
 
     createChatSession(userId, match.getId());
 
