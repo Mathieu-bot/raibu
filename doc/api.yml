@@ -1,0 +1,419 @@
+openapi: 3.0.3
+info:
+  title: Raibu Backend API
+  version: 1.0.0
+  description: |
+    OpenAPI specification for the Raibu backend.
+    This API powers the WebRTC random video chat application, including
+    authentication via Google, matchmaking, reporting, and moderation.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /ping:
+    get:
+      summary: Healthcheck
+      description: Simple healthcheck endpoint.
+      responses:
+        '200':
+          description: Pong
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: pong
+
+  /ws:
+    get:
+      summary: WebSocket (SockJS/STOMP) endpoint
+      description: |
+        Entry point for SockJS/STOMP WebSocket connections used for signaling and matchmaking.
+        This is not intended to be called directly as a normal REST endpoint.
+      responses:
+        '101':
+          description: WebSocket protocol upgrade (during normal operation)
+        '200':
+          description: SockJS HTTP fallback response
+
+  /me:
+    get:
+      summary: Get current authenticated user
+      description: Returns the currently authenticated user (Google OAuth2).
+      security:
+        - googleOAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: Not authenticated
+
+  /me/country:
+    put:
+      summary: Update current user country
+      description: Updates the preferred countryCode for the authenticated user.
+      security:
+        - googleOAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCountryRequest'
+      responses:
+        '200':
+          description: Country updated
+        '400':
+          description: Invalid request body
+        '401':
+          description: Not authenticated
+        '404':
+          description: User not found
+
+  /users/{userId}:
+    get:
+      summary: Get user by ID
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+
+  /reports:
+    post:
+      summary: Create a report
+      description: Create a report against another user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportRequest'
+      responses:
+        '200':
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+
+  /reports/pending:
+    get:
+      summary: Get pending reports
+      responses:
+        '200':
+          description: List of pending reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+
+  /admin/reports:
+    get:
+      summary: List reports (admin)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/ReportStatus'
+          required: false
+      responses:
+        '200':
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+
+  /admin/users/{userId}/reports:
+    get:
+      summary: Get reports for a user (admin)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of reports for this user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+
+  /admin/reports/{reportId}/status:
+    put:
+      summary: Update report status (admin)
+      parameters:
+        - in: path
+          name: reportId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReportStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+        '404':
+          description: Report not found
+
+  /admin/users/{userId}/sessions:
+    get:
+      summary: Get user chat sessions (admin)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of chat sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSession'
+
+  /admin/users/{userId}/ban:
+    put:
+      summary: Ban/unban a user (admin)
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserBanRequest'
+      responses:
+        '200':
+          description: Ban flag updated
+        '404':
+          description: User not found
+
+components:
+  securitySchemes:
+    googleOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+          tokenUrl: https://oauth2.googleapis.com/token
+          scopes:
+            openid: OpenID Connect scope
+            profile: Access to basic profile info
+            email: Access to email address
+
+  schemas:
+    MeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+        avatarUrl:
+          type: string
+          format: uri
+        countryCode:
+          type: string
+          nullable: true
+        banned:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/UserStatus'
+
+    UpdateCountryRequest:
+      type: object
+      required:
+        - countryCode
+      properties:
+        countryCode:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+          nullable: true
+        sessionId:
+          type: string
+          nullable: true
+        provider:
+          type: string
+          nullable: true
+        providerId:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        countryCode:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastActiveAt:
+          type: string
+          format: date-time
+          nullable: true
+        banned:
+          type: boolean
+
+    UserStatus:
+      type: string
+      enum:
+        - IDLE
+        - SEARCHING
+        - IN_CHAT
+        - OFFLINE
+
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+        reporterId:
+          type: string
+        reportedUserId:
+          type: string
+        sessionId:
+          type: string
+          nullable: true
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+
+    ReportRequest:
+      type: object
+      required:
+        - reporterId
+        - reportedUserId
+        - reason
+      properties:
+        reporterId:
+          type: string
+        reportedUserId:
+          type: string
+        sessionId:
+          type: string
+          nullable: true
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        description:
+          type: string
+          nullable: true
+
+    ReportReason:
+      type: string
+      enum:
+        - INAPPROPRIATE_BEHAVIOR
+        - NUDITY
+        - HARASSMENT
+        - SPAM
+        - OTHER
+
+    ReportStatus:
+      type: string
+      enum:
+        - PENDING
+        - REVIEWED
+        - ACTIONED
+
+    UpdateReportStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+        user1Id:
+          type: string
+        user2Id:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: '#/components/schemas/ChatSessionStatus'
+
+    ChatSessionStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - ENDED
+
+    UpdateUserBanRequest:
+      type: object
+      required:
+        - banned
+      properties:
+        banned:
+          type: boolean
