@@ -41,6 +41,8 @@ public class User {
 
   @Builder.Default private Boolean preferSameCountry = true;
 
+  private String searchMode;
+
   @Enumerated(EnumType.STRING)
   private UserStatus status;
 
