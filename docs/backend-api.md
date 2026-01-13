@@ -18,6 +18,7 @@ Returns the currently authenticated user (via Google OAuth2).
     "email": "string",           // Google email
     "avatarUrl": "string",       // Google avatar URL
     "countryCode": "FR",         // Country code (derived from Google locale or set by the user)
+    "gender": "FEMALE",          // Optional gender, free string (recommended: MALE | FEMALE | NON_BINARY | OTHER)
     "banned": false,
     "status": "IDLE"             // IDLE | SEARCHING | IN_CHAT | OFFLINE
   }
@@ -39,6 +40,44 @@ Allows the authenticated user to update their preferred country.
   - `400`: `countryCode` missing or empty
   - `401`: unauthenticated
   - `404`: user not found (should not normally happen)
+
+### `GET /me/preferences`
+
+Returns the matchmaking-related preferences for the authenticated user.
+
+- **Method**: `GET`
+- **Auth**: required
+- **200 response** (example):
+  ```json
+  {
+    "countryCode": "FR",
+    "preferredLanguages": ["fr", "en"],
+    "interests": ["gaming", "music"],
+    "preferredGenders": ["MALE", "FEMALE"],
+    "preferSameCountry": true
+  }
+  ```
+
+### `PUT /me/preferences`
+
+Updates the matchmaking-related preferences for the authenticated user.
+
+- **Method**: `PUT`
+- **Auth**: required
+- **Body (JSON)** (all fields optional):
+  ```json
+  {
+    "preferredLanguages": ["fr", "en"],
+    "interests": ["gaming", "music"],
+    "preferredGenders": ["FEMALE"],
+    "preferSameCountry": false,
+    "gender": "MALE"
+  }
+  ```
+- **Rules**:
+  - If a list is provided as empty (`[]`), the corresponding preference is cleared.
+  - If a field is omitted, it is not changed.
+  - `gender` is a free string; the frontend should stick to a controlled set of values.
 
 ## Users
 
