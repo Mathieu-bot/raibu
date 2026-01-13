@@ -323,3 +323,75 @@ The frontend should therefore:
 
 - avoid fast loops on these endpoints,
 - handle 429 responses gracefully (wait, then retry later if needed).
+
+## Notifications
+
+### REST: `GET /notifications`
+
+Returns the notifications for the currently authenticated user.
+
+- **Method**: `GET`
+- **Auth**: required
+- **Query params** (optional):
+  - `unread` (`boolean`): if `true`, returns only unread notifications.
+  - `limit` (`number`): max number of notifications to return (1–100, default ≈ 50).
+- **200 response** (example):
+  ```json
+  [
+    {
+      "id": "string",
+      "type": "USER_BANNED",
+      "message": "Your account has been banned.",
+      "data": null,
+      "createdAt": "2024-01-01T12:00:00Z",
+      "read": false
+    }
+  ]
+  ```
+
+### REST: `PUT /notifications/{notificationId}/read`
+
+Marks a specific notification as read for the authenticated user.
+
+- **Method**: `PUT`
+- **Auth**: required
+- **Path params**:
+  - `notificationId`: ID of the notification to mark as read.
+- **Responses**:
+  - `200` – notification marked as read (idempotent if already read).
+  - `404` – notification not found or does not belong to the current user.
+
+### WebSocket: `/user/queue/notifications`
+
+- The client should subscribe to `/user/queue/notifications` over STOMP.
+- On the backend, notifications are sent as `SignalMessage`-like payloads specialized for notifications:
+  ```json
+  {
+    "id": "string",
+    "type": "REPORT_ACTIONED",      // USER_BANNED | USER_UNBANNED | REPORT_ACTIONED
+    "message": "One of your reports has been processed.",
+    "data": "{\"reportId\":\"...\"}",
+    "createdAt": "2024-01-01T12:34:56Z",
+    "read": false
+  }
+  ```
+
+### When notifications are emitted
+
+Currently, the backend emits notifications for the following events:
+
+- **User banned by admin** (`PUT /admin/users/{userId}/ban` with `banned = true`):
+  - Type: `USER_BANNED`.
+  - Message: `"Your account has been banned."`.
+- **User unbanned by admin** (`PUT /admin/users/{userId}/ban` with `banned = false`):
+  - Type: `USER_UNBANNED`.
+  - Message: `"Your account has been unbanned."`.
+- **Report processed by admin** (`PUT /admin/reports/{reportId}/status` to `ACTIONED`):
+  - Type: `REPORT_ACTIONED`.
+  - Message: `"One of your reports has been processed."`.
+  - `data` contains a small JSON string with the `reportId`.
+- **Auto-ban after multiple reports** (when a user reaches the report threshold and is auto-banned):
+  - Type: `USER_BANNED`.
+  - Message: `"Your account has been banned due to multiple reports."`.
+
+The frontend can rely on these notifications (via WebSocket or the REST list) to display in-app banners, toasts, or badges when important moderation-related events happen.

@@ -5,9 +5,11 @@ import java.util.List;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import shi.raibu.shi.model.Notification.NotificationType;
 import shi.raibu.shi.model.Report;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.service.NotificationService;
 
 @RestController
 @RequestMapping("/reports")
@@ -15,6 +17,7 @@ import shi.raibu.shi.repository.UserRepository;
 public class ReportController {
   private final ReportRepository reportRepository;
   private final UserRepository userRepository;
+  private final NotificationService notificationService;
 
   @PostMapping
   public ResponseEntity<Report> createReport(@RequestBody ReportRequest request) {
@@ -38,8 +41,16 @@ public class ReportController {
           .findById(request.reportedUserId)
           .ifPresent(
               user -> {
-                user.setBanned(true);
-                userRepository.save(user);
+                if (!user.isBanned()) {
+                  user.setBanned(true);
+                  userRepository.save(user);
+
+                  notificationService.notifyUser(
+                      user.getId(),
+                      NotificationType.USER_BANNED,
+                      "Your account has been banned due to multiple reports.",
+                      null);
+                }
               });
     }
 
