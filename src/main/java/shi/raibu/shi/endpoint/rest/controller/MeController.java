@@ -39,6 +39,7 @@ public class MeController {
             user.getDisplayName(),
             user.getEmail(),
             user.getAvatarUrl(),
+            user.getCountryCode(),
             user.isBanned(),
             user.getStatus());
 
@@ -50,6 +51,7 @@ public class MeController {
       String displayName,
       String email,
       String avatarUrl,
+      String countryCode,
       boolean banned,
       User.UserStatus status) {}
 }
