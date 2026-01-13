@@ -20,12 +20,29 @@ public class SignalingController {
   private final SimpMessagingTemplate messagingTemplate;
   private final MatchmakingService matchmakingService;
 
+  private void sendErrorToUser(String userId, String code) {
+    SignalMessage error =
+        SignalMessage.builder()
+            .type(SignalMessage.SignalType.ERROR)
+            .from("system")
+            .to(userId)
+            .data(code)
+            .build();
+    messagingTemplate.convertAndSendToUser(userId, "/queue/match", error);
+  }
+
   /** Search for a random match */
   @MessageMapping("/search")
   public void searchForMatch(Principal principal, SimpMessageHeaderAccessor headerAccessor) {
     String userId = principal.getName();
     String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
     log.info("User {} searching for match (session: {})", userId, sessionId);
+
+    if (matchmakingService.isUserBanned(userId)) {
+      log.info("Blocked banned user {} from searching for match", userId);
+      sendErrorToUser(userId, "USER_BANNED");
+      return;
+    }
 
     matchmakingService.startSearching(userId);
 
@@ -76,6 +93,12 @@ public class SignalingController {
   public void nextUser(Principal principal) {
     String userId = principal.getName();
     log.info("User {} wants to skip to next", userId);
+
+    if (matchmakingService.isUserBanned(userId)) {
+      log.info("Blocked banned user {} from requesting next", userId);
+      sendErrorToUser(userId, "USER_BANNED");
+      return;
+    }
 
     matchmakingService.endChat(userId);
 
