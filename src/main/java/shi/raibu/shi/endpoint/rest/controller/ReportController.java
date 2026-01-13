@@ -10,6 +10,7 @@ import shi.raibu.shi.model.Report;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.NotificationService;
+import shi.raibu.shi.service.ReputationService;
 
 @RestController
 @RequestMapping("/reports")
@@ -18,6 +19,7 @@ public class ReportController {
   private final ReportRepository reportRepository;
   private final UserRepository userRepository;
   private final NotificationService notificationService;
+  private final ReputationService reputationService;
 
   @PostMapping
   public ResponseEntity<Report> createReport(@RequestBody ReportRequest request) {
@@ -44,6 +46,8 @@ public class ReportController {
                 if (!user.isBanned()) {
                   user.setBanned(true);
                   userRepository.save(user);
+
+                  reputationService.registerBan(user.getId());
 
                   notificationService.notifyUser(
                       user.getId(),
