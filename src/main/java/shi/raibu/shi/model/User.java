@@ -31,6 +31,17 @@ public class User {
 
   private String countryCode;
 
+  private String gender;
+
+  private String preferredLanguages;
+
+  private String interests;
+
+  private String preferredGenders;
+
+  @Builder.Default
+  private Boolean preferSameCountry = true;
+
   @Enumerated(EnumType.STRING)
   private UserStatus status;
 

@@ -1,6 +1,9 @@
 package shi.raibu.shi.endpoint.rest.controller;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,6 +46,7 @@ public class MeController {
             user.getEmail(),
             user.getAvatarUrl(),
             user.getCountryCode(),
+            user.getGender(),
             user.isBanned(),
             user.getStatus());
 
@@ -55,8 +59,84 @@ public class MeController {
       String email,
       String avatarUrl,
       String countryCode,
+      String gender,
       boolean banned,
       User.UserStatus status) {}
+
+  @GetMapping("/me/preferences")
+  public ResponseEntity<MePreferencesResponse> getPreferences(
+      @AuthenticationPrincipal OidcUser oidcUser) {
+    if (oidcUser == null) {
+      return ResponseEntity.status(401).build();
+    }
+
+    String subject = oidcUser.getSubject();
+    String email = oidcUser.getEmail();
+
+    User user =
+        userRepository
+            .findByProviderAndProviderId("google", subject)
+            .orElseGet(() -> userRepository.findByEmail(email).orElse(null));
+
+    if (user == null) {
+      return ResponseEntity.notFound().build();
+    }
+
+    MePreferencesResponse response =
+        new MePreferencesResponse(
+            user.getCountryCode(),
+            splitCsv(user.getPreferredLanguages()),
+            splitCsv(user.getInterests()),
+            splitCsv(user.getPreferredGenders()),
+            user.getPreferSameCountry());
+
+    return ResponseEntity.ok(response);
+  }
+
+  @PutMapping("/me/preferences")
+  public ResponseEntity<Void> updatePreferences(
+      @AuthenticationPrincipal OidcUser oidcUser, @RequestBody UpdatePreferencesRequest request) {
+    if (oidcUser == null) {
+      return ResponseEntity.status(401).build();
+    }
+
+    if (request == null) {
+      return ResponseEntity.badRequest().build();
+    }
+
+    String subject = oidcUser.getSubject();
+    String email = oidcUser.getEmail();
+
+    User user =
+        userRepository
+            .findByProviderAndProviderId("google", subject)
+            .orElseGet(() -> userRepository.findByEmail(email).orElse(null));
+
+    if (user == null) {
+      return ResponseEntity.notFound().build();
+    }
+
+    if (request.preferredLanguages() != null) {
+      user.setPreferredLanguages(joinCsv(request.preferredLanguages()));
+    }
+    if (request.interests() != null) {
+      user.setInterests(joinCsv(request.interests()));
+    }
+    if (request.preferredGenders() != null) {
+      user.setPreferredGenders(joinCsv(request.preferredGenders()));
+    }
+    if (request.preferSameCountry() != null) {
+      user.setPreferSameCountry(request.preferSameCountry());
+    }
+
+    if (request.gender() != null && !request.gender().isBlank()) {
+      user.setGender(request.gender().trim());
+    }
+
+    userRepository.save(user);
+
+    return ResponseEntity.ok().build();
+  }
 
   @PutMapping("/me/country")
   public ResponseEntity<Void> updateCountry(
@@ -89,4 +169,40 @@ public class MeController {
   }
 
   public record UpdateCountryRequest(String countryCode) {}
+
+  public record MePreferencesResponse(
+      String countryCode,
+      List<String> preferredLanguages,
+      List<String> interests,
+      List<String> preferredGenders,
+      Boolean preferSameCountry) {}
+
+  public record UpdatePreferencesRequest(
+      List<String> preferredLanguages,
+      List<String> interests,
+      List<String> preferredGenders,
+      Boolean preferSameCountry,
+      String gender) {}
+
+  private static String joinCsv(List<String> values) {
+    if (values == null || values.isEmpty()) {
+      return null;
+    }
+    return values.stream().map(String::trim).filter(v -> !v.isEmpty()).collect(Collectors.joining(","));
+  }
+
+  private static List<String> splitCsv(String value) {
+    if (value == null || value.isBlank()) {
+      return List.of();
+    }
+    String[] parts = value.split(",");
+    List<String> result = new ArrayList<>();
+    for (String part : parts) {
+      String trimmed = part.trim();
+      if (!trimmed.isEmpty()) {
+        result.add(trimmed);
+      }
+    }
+    return result;
+  }
 }
