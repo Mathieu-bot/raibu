@@ -30,6 +30,15 @@ paths:
       description: |
         Entry point for SockJS/STOMP WebSocket connections used for signaling and matchmaking.
         This is not intended to be called directly as a normal REST endpoint.
+
+        Main STOMP flow (summary):
+        - Search for a match:
+          - Client sends to `/app/search`.
+          - Optional JSON payload:
+            `{ "mode": "english_practice" }` (or other modes like `gaming`, `coworking`, etc.).
+        - Receive a match:
+          - Subscribe to `/user/queue/match`.
+          - Backend sends `MATCH_FOUND` messages and may also send an `ICEBREAKER` message containing a short question to help start the conversation.
       responses:
         '101':
           description: WebSocket protocol upgrade (during normal operation)
