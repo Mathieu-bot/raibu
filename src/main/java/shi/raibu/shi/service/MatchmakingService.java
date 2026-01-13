@@ -40,6 +40,8 @@ public class MatchmakingService {
     }
     String countryCode = currentUser.getCountryCode();
 
+    String currentMode = normalizeMode(currentUser.getSearchMode());
+
     List<User> searchingUsers =
         userRepository.findByStatusAndBannedFalse(User.UserStatus.SEARCHING).stream()
             .filter(user -> !user.getId().equals(userId))
@@ -60,7 +62,17 @@ public class MatchmakingService {
     List<User> bestCandidates = new ArrayList<>();
 
     for (User candidate : searchingUsers) {
+      // Exclude candidates with very low reputation
+      if (candidate.getReputationScore() <= -50) {
+        continue;
+      }
+
       int score = 0;
+
+      String candidateMode = normalizeMode(candidate.getSearchMode());
+      if (currentMode != null && currentMode.equals(candidateMode)) {
+        score += 3;
+      }
 
       if (preferSameCountry
           && countryCode != null
@@ -94,6 +106,10 @@ public class MatchmakingService {
         score += 2;
       }
 
+      // Reputation influence: users with higher reputationScore are preferred,
+      // while users with strongly negative reputation are penalized.
+      score += candidate.getReputationScore() / 10;
+
       if (score > maxScore) {
         bestCandidates.clear();
         bestCandidates.add(candidate);
@@ -124,13 +140,35 @@ public class MatchmakingService {
 
   @Transactional
   public void startSearching(String userId) {
-    updateUserStatus(userId, User.UserStatus.SEARCHING);
-    log.info("User {} started searching", userId);
+    startSearching(userId, null);
+  }
+
+  @Transactional
+  public void startSearching(String userId, String mode) {
+    String normalizedMode = normalizeMode(mode);
+    userRepository
+        .findById(userId)
+        .ifPresent(
+            user -> {
+              user.setSearchMode(normalizedMode);
+              user.setStatus(User.UserStatus.SEARCHING);
+              user.setLastActiveAt(Instant.now());
+              userRepository.save(user);
+            });
+    log.info("User {} started searching with mode {}", userId, normalizedMode);
   }
 
   @Transactional
   public void stopSearching(String userId) {
-    updateUserStatus(userId, User.UserStatus.IDLE);
+    userRepository
+        .findById(userId)
+        .ifPresent(
+            user -> {
+              user.setStatus(User.UserStatus.IDLE);
+              user.setSearchMode(null);
+              user.setLastActiveAt(Instant.now());
+              userRepository.save(user);
+            });
     log.info("User {} stopped searching", userId);
   }
 
@@ -183,6 +221,14 @@ public class MatchmakingService {
       return null;
     }
     String trimmed = gender.trim().toLowerCase();
+    return trimmed.isEmpty() ? null : trimmed;
+  }
+
+  private String normalizeMode(String mode) {
+    if (mode == null) {
+      return null;
+    }
+    String trimmed = mode.trim().toLowerCase();
     return trimmed.isEmpty() ? null : trimmed;
   }
 

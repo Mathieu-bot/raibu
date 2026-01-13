@@ -41,11 +41,18 @@ public class User {
 
   @Builder.Default private Boolean preferSameCountry = true;
 
+  private String searchMode;
+
   @Enumerated(EnumType.STRING)
   private UserStatus status;
 
   private Instant createdAt;
   private Instant lastActiveAt;
+
+  private int reputationScore;
+  private int positiveFeedbackCount;
+  private int negativeFeedbackCount;
+  private int strikeCount;
 
   private boolean banned;
 

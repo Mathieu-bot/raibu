@@ -22,6 +22,7 @@ public class SignalMessage {
     MATCH_FOUND,
     PEER_DISCONNECTED,
     CHAT_TEXT,
-    ERROR
+    ERROR,
+    ICEBREAKER
   }
 }

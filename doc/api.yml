@@ -30,6 +30,15 @@ paths:
       description: |
         Entry point for SockJS/STOMP WebSocket connections used for signaling and matchmaking.
         This is not intended to be called directly as a normal REST endpoint.
+
+        Main STOMP flow (summary):
+        - Search for a match:
+          - Client sends to `/app/search`.
+          - Optional JSON payload:
+            `{ "mode": "english_practice" }` (or other modes like `gaming`, `coworking`, etc.).
+        - Receive a match:
+          - Subscribe to `/user/queue/match`.
+          - Backend sends `MATCH_FOUND` messages and may also send an `ICEBREAKER` message containing a short question to help start the conversation.
       responses:
         '101':
           description: WebSocket protocol upgrade (during normal operation)
@@ -73,6 +82,34 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ChatMessage'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Forbidden (not a participant)
+        '404':
+          description: Session not found
+
+  /sessions/{sessionId}/feedback:
+    post:
+      summary: Submit feedback for a session
+      description: Allows a participant of a session to submit simple like/dislike feedback.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionFeedbackRequest'
+      responses:
+        '200':
+          description: Feedback recorded (or already present)
         '401':
           description: Not authenticated
         '403':
@@ -356,6 +393,24 @@ paths:
         '404':
           description: Notification not found
 
+  /friends:
+    get:
+      summary: List friends (mutual matches) for current user
+      description: Returns the list of users who have a mutual like relationship (friends) with the authenticated user.
+      security:
+        - googleOAuth: []
+      responses:
+        '200':
+          description: List of friends
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Friend'
+        '401':
+          description: Not authenticated
+
 components:
   securitySchemes:
     googleOAuth:
@@ -585,6 +640,14 @@ components:
           type: string
           format: date-time
 
+    SessionFeedbackRequest:
+      type: object
+      required:
+        - liked
+      properties:
+        liked:
+          type: boolean
+
     ChatMessagePayload:
       type: object
       properties:
@@ -664,3 +727,13 @@ components:
         - USER_BANNED
         - USER_UNBANNED
         - REPORT_ACTIONED
+        - MATCH_CONFIRMED
+
+    Friend:
+      type: object
+      properties:
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
