@@ -60,6 +60,11 @@ public class MatchmakingService {
     List<User> bestCandidates = new ArrayList<>();
 
     for (User candidate : searchingUsers) {
+      // Exclude candidates with very low reputation
+      if (candidate.getReputationScore() <= -50) {
+        continue;
+      }
+
       int score = 0;
 
       if (preferSameCountry
@@ -93,6 +98,10 @@ public class MatchmakingService {
           && candidatePreferredGenders.contains(currentGender)) {
         score += 2;
       }
+
+      // Reputation influence: users with higher reputationScore are preferred,
+      // while users with strongly negative reputation are penalized.
+      score += candidate.getReputationScore() / 10;
 
       if (score > maxScore) {
         bestCandidates.clear();
