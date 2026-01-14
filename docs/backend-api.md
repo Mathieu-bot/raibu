@@ -174,6 +174,59 @@ Returns the list of friends (mutual matches) for the currently authenticated use
   - A friendship is created when **both** participants of a `ChatSession` submit `liked = true` feedback.
   - When a friendship is created, both users receive a `MATCH_CONFIRMED` notification.
 
+### `GET /friends/{friendId}/messages`
+
+Returns the list of direct messages (DMs) exchanged between the authenticated user and a given friend.
+
+- **Method**: `GET`
+- **Auth**: required
+- **Path params**:
+  - `friendId`: ID of the friend (must be in the current user's friends list).
+- **Responses**:
+  - `200` – array of `DirectMessage`:
+    ```json
+    [
+      {
+        "id": "string",
+        "senderId": "string",
+        "recipientId": "string",
+        "content": "Hi there!",
+        "sentAt": "2024-01-01T12:00:10Z"
+      }
+    ]
+    ```
+  - `401` – unauthenticated.
+  - `403` – users are not friends.
+
+### `POST /friends/{friendId}/messages`
+
+Sends a new direct message from the authenticated user to a given friend.
+
+- **Method**: `POST`
+- **Auth**: required
+- **Path params**:
+  - `friendId`: ID of the friend (must be in the current user's friends list).
+- **Body (JSON)**:
+  ```json
+  {
+    "content": "Hello!"
+  }
+  ```
+- **Responses**:
+  - `200` – the created `DirectMessage`:
+    ```json
+    {
+      "id": "string",
+      "senderId": "string",
+      "recipientId": "string",
+      "content": "Hello!",
+      "sentAt": "2024-01-01T12:00:10Z"
+    }
+    ```
+  - `400` – invalid content (null/blank).
+  - `401` – unauthenticated.
+  - `403` – users are not friends.
+
 ## Health / utilities
 
 ### `GET /ping`
@@ -304,8 +357,9 @@ Ban or unban a user.
 - **Stop searching**:
   - Send to `/app/stop` (payload ignored).
 
-- **WebRTC signaling**:
-  - Send signaling messages to `/app/signal` with a `SignalMessage`:
+- **WebRTC signaling & call control**:
+  - Send signaling messages to `/app/signal` with a `SignalMessage`.
+  - For WebRTC SDP/ICE exchange (random match or friend call), the frontend uses:
     ```json
     {
       "type": "OFFER" | "ANSWER" | "ICE_CANDIDATE",
@@ -314,7 +368,34 @@ Ban or unban a user.
       "data": { ... }   // SDP or ICE
     }
     ```
-  - The backend relays to `/user/queue/signal` for the recipient.
+  - The backend relays these messages to `/user/queue/signal` for the recipient.
+
+  - For **friend 1‑1 video calls**, additional call-control signal types are defined, toujours envoyés sur `/app/signal` et relayés sur `/user/queue/signal`:
+    - `CALL_INVITE`: invitation d'appel (depuis la liste d'amis ou la vue DM).
+    - `CALL_ACCEPT`: l'ami accepte l'appel.
+    - `CALL_REJECT`: l'ami refuse l'appel.
+    - `CALL_END`: l'un des deux participants raccroche.
+
+  - Tous les signaux de contrôle d'appel partagent le même format de base:
+    ```json
+    {
+      "type": "CALL_INVITE" | "CALL_ACCEPT" | "CALL_REJECT" | "CALL_END",
+      "from": "<currentUserId>",
+      "to": "<friendId>",
+      "data": {
+        "callId": "<callId>",        // identifiant d'appel généré côté frontend, constant pendant toute la durée de l'appel
+        "reason": "string (optionnel)" // raison du rejet ou de la fin d'appel (par ex. user_busy, hangup)
+      }
+    }
+    ```
+
+  - Exemple de séquence recommandée pour un appel vidéo entre amis:
+    1. L'utilisateur A clique sur "Appel vidéo" sur son ami B.
+    2. A envoie un `CALL_INVITE` avec un nouveau `callId`.
+    3. B reçoit `CALL_INVITE` sur `/user/queue/signal`, affiche un popup "incoming call".
+    4. Si B accepte, il envoie `CALL_ACCEPT` avec le même `callId`.
+    5. Après acceptation, A et B démarrent l'échange WebRTC classique via `OFFER` / `ANSWER` / `ICE_CANDIDATE` sur `/app/signal`.
+    6. Quand l'un des deux raccroche, il envoie un `CALL_END` (avec le même `callId` et éventuellement un `reason`), ce qui permet au frontend de fermer l'UI et de nettoyer les ressources.
 
 - **Text chat during a session**:
   - The client can send text messages while the video chat is running.
@@ -338,6 +419,35 @@ Ban or unban a user.
         "sessionId": "<sessionId>",
         "senderId": "<senderId>",
         "content": "Hello!",
+        "sentAt": "2024-01-01T12:00:10Z"
+      }
+    }
+    ```
+
+- **Direct messages between friends (DMs)**:
+  - The client can send persistent 1-to-1 messages to a friend (independent of active chat sessions).
+  - **Send**: `/app/dm` with a `ChatInboundMessage`:
+    ```json
+    {
+      "to": "<friendId>",
+      "content": "Hey, are you free to talk?"
+    }
+    ```
+  - The backend checks:
+    - sender is not banned,
+    - there is an existing `Friendship` between the two users.
+    - If they are not friends, an `ERROR` message with code `NOT_FRIENDS` is sent back on `/user/queue/match`.
+  - Messages are persisted as `DirectMessage` rows and broadcast as `SignalMessage` on `/user/queue/dm` for **both** users:
+    ```json
+    {
+      "type": "DM_TEXT",
+      "from": "<senderId>",
+      "to": "<recipientId>",
+      "data": {
+        "id": "<directMessageId>",
+        "senderId": "<senderId>",
+        "recipientId": "<recipientId>",
+        "content": "Hey, are you free to talk?",
         "sentAt": "2024-01-01T12:00:10Z"
       }
     }
@@ -426,7 +536,7 @@ Marks a specific notification as read for the authenticated user.
   ```json
   {
     "id": "string",
-    "type": "REPORT_ACTIONED",      // USER_BANNED | USER_UNBANNED | REPORT_ACTIONED | MATCH_CONFIRMED
+    "type": "REPORT_ACTIONED",      // USER_BANNED | USER_UNBANNED | REPORT_ACTIONED | MATCH_CONFIRMED | NEW_DM
     "message": "One of your reports has been processed.",
     "data": "{\"reportId\":\"...\"}",
     "createdAt": "2024-01-01T12:34:56Z",
@@ -452,5 +562,12 @@ Currently, the backend emits notifications for the following events:
   - Type: `USER_BANNED`.
   - Message: `"Your account has been banned due to multiple reports."`.
   - For mutual matches / friends, a `MATCH_CONFIRMED` notification is emitted with a message like `"You have a new mutual match."` and `data` containing a small JSON with `friendId`.
+  - For new direct messages (DM) between friends, a `NEW_DM` notification is emitted for the recipient with a message like `"You have a new message."` and `data` containing a small JSON with `senderId` and `directMessageId`:
+    ```json
+    {
+      "senderId": "<senderId>",
+      "directMessageId": "<directMessageId>"
+    }
+    ```
 
 The frontend can rely on these notifications (via WebSocket or the REST list) to display in-app banners, toasts, or badges when important moderation-related events happen.
