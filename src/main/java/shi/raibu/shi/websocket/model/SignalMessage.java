@@ -22,7 +22,12 @@ public class SignalMessage {
     MATCH_FOUND,
     PEER_DISCONNECTED,
     CHAT_TEXT,
+    DM_TEXT,
     ERROR,
-    ICEBREAKER
+    ICEBREAKER,
+    CALL_INVITE,
+    CALL_ACCEPT,
+    CALL_REJECT,
+    CALL_END
   }
 }

@@ -107,6 +107,14 @@ jacocoTestReport {
     }
 }
 
+bootJar {
+    archiveFileName = "app.jar"
+}
+
+jar {
+    enabled = true
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web:3.2.2'
 

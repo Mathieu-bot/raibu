@@ -52,6 +52,7 @@ public class Notification {
     USER_BANNED,
     USER_UNBANNED,
     REPORT_ACTIONED,
-    MATCH_CONFIRMED
+    MATCH_CONFIRMED,
+    NEW_DM
   }
 }

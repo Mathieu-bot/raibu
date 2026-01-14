@@ -12,14 +12,17 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 import shi.raibu.shi.model.ChatMessage;
 import shi.raibu.shi.model.ChatSession;
+import shi.raibu.shi.model.DirectMessage;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatMessageRepository;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.service.DirectMessageService;
 import shi.raibu.shi.service.IcebreakerService;
 import shi.raibu.shi.service.MatchmakingService;
 import shi.raibu.shi.websocket.model.ChatInboundMessage;
 import shi.raibu.shi.websocket.model.ChatMessagePayload;
+import shi.raibu.shi.websocket.model.DirectMessagePayload;
 import shi.raibu.shi.websocket.model.SearchRequest;
 import shi.raibu.shi.websocket.model.SignalMessage;
 
@@ -33,6 +36,7 @@ public class SignalingController {
   private final ChatMessageRepository chatMessageRepository;
   private final UserRepository userRepository;
   private final IcebreakerService icebreakerService;
+  private final DirectMessageService directMessageService;
 
   private void sendErrorToUser(String userId, String code) {
     SignalMessage error =
@@ -210,6 +214,60 @@ public class SignalingController {
 
     messagingTemplate.convertAndSendToUser(recipientId, "/queue/chat", outgoing);
     messagingTemplate.convertAndSendToUser(senderId, "/queue/chat", outgoing);
+  }
+
+  /** Send direct message (DM) between friends, independent of active chat sessions */
+  @MessageMapping("/dm")
+  public void sendDirectMessage(Principal principal, @Payload ChatInboundMessage inbound) {
+    String senderId = principal.getName();
+    String recipientId = inbound.getTo();
+    log.info("Direct message from {} to {}", senderId, recipientId);
+
+    if (recipientId == null || recipientId.isBlank()) {
+      log.warn("Ignoring DM from {} with no recipient", senderId);
+      return;
+    }
+
+    if (matchmakingService.isUserBanned(senderId)) {
+      log.info("Blocked banned user {} from sending DM", senderId);
+      sendErrorToUser(senderId, "USER_BANNED");
+      return;
+    }
+
+    String content = inbound.getContent();
+    if (content == null) {
+      log.warn("Ignoring null DM content from {}", senderId);
+      return;
+    }
+
+    try {
+      DirectMessage dm = directMessageService.sendMessage(senderId, recipientId, content);
+
+      DirectMessagePayload payload =
+          DirectMessagePayload.builder()
+              .id(dm.getId())
+              .senderId(dm.getSenderId())
+              .recipientId(dm.getRecipientId())
+              .content(dm.getContent())
+              .sentAt(dm.getSentAt())
+              .build();
+
+      SignalMessage outgoing =
+          SignalMessage.builder()
+              .type(SignalMessage.SignalType.DM_TEXT)
+              .from(senderId)
+              .to(recipientId)
+              .data(payload)
+              .build();
+
+      messagingTemplate.convertAndSendToUser(recipientId, "/queue/dm", outgoing);
+      messagingTemplate.convertAndSendToUser(senderId, "/queue/dm", outgoing);
+    } catch (IllegalArgumentException e) {
+      log.warn("Rejecting DM from {} to {}: {}", senderId, recipientId, e.getMessage());
+    } catch (IllegalStateException e) {
+      log.info("Rejecting DM from {} to {}: users are not friends", senderId, recipientId);
+      sendErrorToUser(senderId, "NOT_FRIENDS");
+    }
   }
 
   /** Skip to the next user ("Next" button) */
