@@ -411,6 +411,67 @@ paths:
         '401':
           description: Not authenticated
 
+  /friends/{friendId}/messages:
+    get:
+      summary: Get direct messages with a friend
+      description: Returns the direct message history between the authenticated user and the specified friend.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: path
+          name: friendId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of direct messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DirectMessage'
+        '401':
+          description: Not authenticated
+        '403':
+          description: Not friends
+    post:
+      summary: Send a direct message to a friend
+      description: Sends a new direct message from the authenticated user to the specified friend.
+      security:
+        - googleOAuth: []
+      parameters:
+        - in: path
+          name: friendId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Direct message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DirectMessage'
+        '400':
+          description: Invalid content
+        '401':
+          description: Not authenticated
+        '403':
+          description: Not friends
+
 components:
   securitySchemes:
     googleOAuth:
@@ -728,6 +789,7 @@ components:
         - USER_UNBANNED
         - REPORT_ACTIONED
         - MATCH_CONFIRMED
+        - NEW_DM
 
     Friend:
       type: object
@@ -735,5 +797,20 @@ components:
         userId:
           type: string
         createdAt:
+          type: string
+          format: date-time
+
+    DirectMessage:
+      type: object
+      properties:
+        id:
+          type: string
+        senderId:
+          type: string
+        recipientId:
+          type: string
+        content:
+          type: string
+        sentAt:
           type: string
           format: date-time
