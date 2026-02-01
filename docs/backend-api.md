@@ -132,6 +132,32 @@ Updates the matchmaking-related preferences for the authenticated user.
 
 - **Method**: `GET`
 - **Returns** full information for a user by their ID.
+- **200 response** (example):
+  ```json
+  {
+    "id": "string",
+    "username": "string",
+    "email": "string",
+    "displayName": "string",
+    "avatarUrl": "string",
+    "countryCode": "FR",
+    "gender": "FEMALE",
+    "preferredLanguages": "fr,en",
+    "interests": "gaming,music",
+    "preferredGenders": "MALE,FEMALE",
+    "preferSameCountry": true,
+    "searchMode": "gaming",
+    "status": "IDLE",            // IDLE | SEARCHING | IN_CHAT | OFFLINE
+    "banned": false,
+    "createdAt": "2024-01-01T12:00:00Z",
+    "lastActiveAt": "2024-01-01T12:30:00Z",
+    "reputationScore": 10,
+    "positiveFeedbackCount": 8,
+    "negativeFeedbackCount": 2,
+    "strikeCount": 0
+  }
+  ```
+- **404** – user not found.
 
 ## Sessions
 
@@ -463,7 +489,9 @@ Ban or unban a user.
       "data": "What's something small that made you smile recently?"
     }
     ```
-  - Icebreakers depend on the selected `mode` when provided (e.g. different friendly questions for `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movies_series`, `food`, `study`, etc.).
+  - Icebreakers depend on the selected `mode` when provided. Supported modes include:
+    - `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movies_series`, `food`, `study`.
+    - If no mode or an unsupported mode is provided, a default set of generic icebreakers is used.
 - **Banned users**:
   - When a banned user tries to search or go to the next user, the backend will not start matchmaking.
   - Instead, it sends an `ERROR` `SignalMessage` on `/user/queue/match`:
@@ -561,8 +589,14 @@ Currently, the backend emits notifications for the following events:
 - **Auto-ban after multiple reports** (when a user reaches the report threshold and is auto-banned):
   - Type: `USER_BANNED`.
   - Message: `"Your account has been banned due to multiple reports."`.
-  - For mutual matches / friends, a `MATCH_CONFIRMED` notification is emitted with a message like `"You have a new mutual match."` and `data` containing a small JSON with `friendId`.
-  - For new direct messages (DM) between friends, a `NEW_DM` notification is emitted for the recipient with a message like `"You have a new message."` and `data` containing a small JSON with `senderId` and `directMessageId`:
+- **Mutual match / friendship created** (when both users liked each other in a session):
+  - Type: `MATCH_CONFIRMED`.
+  - Message: `"You have a new mutual match."`.
+  - `data` contains a small JSON string with the `friendId`.
+- **New direct message received** (when a friend sends a DM):
+  - Type: `NEW_DM`.
+  - Message: `"You have a new message."`.
+  - `data` contains a small JSON string with the `senderId` and `directMessageId`:
     ```json
     {
       "senderId": "<senderId>",
