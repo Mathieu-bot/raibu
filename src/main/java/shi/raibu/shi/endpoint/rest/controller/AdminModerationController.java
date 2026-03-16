@@ -1,6 +1,11 @@
 package shi.raibu.shi.endpoint.rest.controller;
 
 import java.util.List;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,20 +13,25 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.Notification.NotificationType;
 import shi.raibu.shi.model.Report;
 import shi.raibu.shi.model.Report.ReportStatus;
+import shi.raibu.shi.model.Role;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.NotificationService;
 import shi.raibu.shi.service.ReputationService;
+import shi.raibu.shi.security.RequireRole;
 
 @RestController
 @RequestMapping("/admin")
 @AllArgsConstructor
+@Tag(name = "Admin Moderation", description = "Administrative endpoints for moderation and user management")
+@SecurityRequirement(name = "oauth2")
 public class AdminModerationController {
 
   private final ReportRepository reportRepository;
@@ -31,6 +41,7 @@ public class AdminModerationController {
   private final ReputationService reputationService;
 
   @GetMapping("/reports")
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<List<Report>> getReports(Report.ReportStatus status) {
     if (status != null) {
       return ResponseEntity.ok(reportRepository.findByStatus(status));
@@ -39,11 +50,13 @@ public class AdminModerationController {
   }
 
   @GetMapping("/users/{userId}/reports")
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<List<Report>> getReportsForUser(@PathVariable String userId) {
     return ResponseEntity.ok(reportRepository.findByReportedUserId(userId));
   }
 
   @PutMapping("/reports/{reportId}/status")
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<Void> updateReportStatus(
       @PathVariable String reportId, @RequestBody UpdateReportStatusRequest request) {
     return reportRepository
@@ -72,11 +85,13 @@ public class AdminModerationController {
   }
 
   @GetMapping("/users/{userId}/sessions")
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<List<ChatSession>> getUserSessions(@PathVariable String userId) {
     return ResponseEntity.ok(chatSessionRepository.findByUser1IdOrUser2Id(userId, userId));
   }
 
   @PutMapping("/users/{userId}/ban")
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<Void> updateUserBan(
       @PathVariable String userId, @RequestBody UpdateUserBanRequest request) {
     return userRepository
