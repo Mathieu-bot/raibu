@@ -2,9 +2,11 @@ package shi.raibu.shi.endpoint.rest.controller;
 
 import java.time.Instant;
 import java.util.List;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import shi.raibu.shi.endpoint.rest.dto.CreateReportDto;
 import shi.raibu.shi.model.Notification.NotificationType;
 import shi.raibu.shi.model.Report;
 import shi.raibu.shi.repository.ReportRepository;
@@ -22,14 +24,14 @@ public class ReportController {
   private final ReputationService reputationService;
 
   @PostMapping
-  public ResponseEntity<Report> createReport(@RequestBody ReportRequest request) {
+  public ResponseEntity<Report> createReport(@Valid @RequestBody CreateReportDto request) {
     Report report =
         Report.builder()
-            .reporterId(request.reporterId)
-            .reportedUserId(request.reportedUserId)
-            .sessionId(request.sessionId)
-            .reason(request.reason)
-            .description(request.description)
+            .reporterId(request.getReporterId())
+            .reportedUserId(request.getReportedUserId())
+            .sessionId(request.getSessionId())
+            .reason(request.getReason())
+            .description(request.getDescription())
             .createdAt(Instant.now())
             .status(Report.ReportStatus.PENDING)
             .build();
@@ -37,10 +39,10 @@ public class ReportController {
     Report saved = reportRepository.save(report);
 
     // Auto-ban
-    long reportCount = reportRepository.findByReportedUserId(request.reportedUserId).size();
+    long reportCount = reportRepository.findByReportedUserId(request.getReportedUserId()).size();
     if (reportCount >= 3) {
       userRepository
-          .findById(request.reportedUserId)
+          .findById(request.getReportedUserId())
           .ifPresent(
               user -> {
                 if (!user.isBanned()) {

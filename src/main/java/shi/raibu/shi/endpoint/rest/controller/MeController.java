@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import shi.raibu.shi.endpoint.rest.dto.UpdateCountryDto;
+import shi.raibu.shi.endpoint.rest.dto.UserPreferencesDto;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
 
@@ -95,7 +98,7 @@ public class MeController {
 
   @PutMapping("/me/preferences")
   public ResponseEntity<Void> updatePreferences(
-      @AuthenticationPrincipal OidcUser oidcUser, @RequestBody UpdatePreferencesRequest request) {
+      @AuthenticationPrincipal OidcUser oidcUser, @Valid @RequestBody UserPreferencesDto request) {
     if (oidcUser == null) {
       return ResponseEntity.status(401).build();
     }
@@ -116,21 +119,21 @@ public class MeController {
       return ResponseEntity.notFound().build();
     }
 
-    if (request.preferredLanguages() != null) {
-      user.setPreferredLanguages(joinCsv(request.preferredLanguages()));
+    if (request.getPreferredLanguages() != null) {
+      user.setPreferredLanguages(joinCsv(request.getPreferredLanguages()));
     }
-    if (request.interests() != null) {
-      user.setInterests(joinCsv(request.interests()));
+    if (request.getInterests() != null) {
+      user.setInterests(joinCsv(request.getInterests()));
     }
-    if (request.preferredGenders() != null) {
-      user.setPreferredGenders(joinCsv(request.preferredGenders()));
+    if (request.getPreferredGenders() != null) {
+      user.setPreferredGenders(joinCsv(request.getPreferredGenders()));
     }
-    if (request.preferSameCountry() != null) {
-      user.setPreferSameCountry(request.preferSameCountry());
+    if (request.getPreferSameCountry() != null) {
+      user.setPreferSameCountry(request.getPreferSameCountry());
     }
 
-    if (request.gender() != null && !request.gender().isBlank()) {
-      user.setGender(request.gender().trim());
+    if (request.getGender() != null && !request.getGender().isBlank()) {
+      user.setGender(request.getGender().trim());
     }
 
     userRepository.save(user);
@@ -140,12 +143,12 @@ public class MeController {
 
   @PutMapping("/me/country")
   public ResponseEntity<Void> updateCountry(
-      @AuthenticationPrincipal OidcUser oidcUser, @RequestBody UpdateCountryRequest request) {
+      @AuthenticationPrincipal OidcUser oidcUser, @Valid @RequestBody UpdateCountryDto request) {
     if (oidcUser == null) {
       return ResponseEntity.status(401).build();
     }
 
-    if (request == null || request.countryCode == null || request.countryCode().isBlank()) {
+    if (request == null || request.getCountryCode() == null || request.getCountryCode().isBlank()) {
       return ResponseEntity.badRequest().build();
     }
 
@@ -161,7 +164,7 @@ public class MeController {
       return ResponseEntity.notFound().build();
     }
 
-    String normalizedCountry = request.countryCode().trim().toUpperCase(Locale.ROOT);
+    String normalizedCountry = request.getCountryCode().trim().toUpperCase(Locale.ROOT);
     user.setCountryCode(normalizedCountry);
     userRepository.save(user);
 
