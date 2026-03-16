@@ -21,12 +21,13 @@ class FriendshipServiceTest {
 
   @Mock private FriendshipRepository friendshipRepository;
   @Mock private NotificationService notificationService;
+  @Mock private CachedFriendshipService cachedFriendshipService;
 
   private FriendshipService friendshipService;
 
   @BeforeEach
   void setUp() {
-    friendshipService = new FriendshipService(friendshipRepository, notificationService);
+    friendshipService = new FriendshipService(friendshipRepository, notificationService, cachedFriendshipService);
   }
 
   @Nested
