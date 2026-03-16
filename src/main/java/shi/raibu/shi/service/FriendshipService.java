@@ -17,6 +17,7 @@ public class FriendshipService {
 
   private final FriendshipRepository friendshipRepository;
   private final NotificationService notificationService;
+  private final CachedFriendshipService cachedFriendshipService;
 
   public Friendship createFriendshipIfAbsent(String userIdA, String userIdB) {
     if (userIdA.equals(userIdB)) {
@@ -36,6 +37,10 @@ public class FriendshipService {
 
     try {
       Friendship saved = friendshipRepository.save(friendship);
+
+      // Evict cache for both users
+      cachedFriendshipService.evictUserFriends(userIdA);
+      cachedFriendshipService.evictUserFriends(userIdB);
 
       // Notify both users that they now have a mutual match / friend.
       String dataJsonForA = String.format("{\"friendId\":\"%s\"}", userIdB);

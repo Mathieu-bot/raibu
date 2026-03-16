@@ -11,6 +11,7 @@ import shi.raibu.shi.repository.UserRepository;
 public class ReputationService {
 
   private final UserRepository userRepository;
+  private final CachedReputationService cachedReputationService;
 
   public void applyFeedback(String toUserId, boolean liked) {
     userRepository
@@ -28,6 +29,7 @@ public class ReputationService {
               score = clamp(score);
               user.setReputationScore(score);
               userRepository.save(user);
+              cachedReputationService.evictUserReputation(toUserId);
             });
   }
 
@@ -40,6 +42,7 @@ public class ReputationService {
               int score = clamp(user.getReputationScore() - 20);
               user.setReputationScore(score);
               userRepository.save(user);
+              cachedReputationService.evictUserReputation(reportedUserId);
             });
   }
 
@@ -56,6 +59,7 @@ public class ReputationService {
               score = clamp(score);
               user.setReputationScore(score);
               userRepository.save(user);
+              cachedReputationService.evictUserReputation(userId);
             });
   }
 
