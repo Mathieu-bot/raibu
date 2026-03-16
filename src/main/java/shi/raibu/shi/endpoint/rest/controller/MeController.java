@@ -5,6 +5,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,11 +27,20 @@ import shi.raibu.shi.repository.UserRepository;
 
 @RestController
 @AllArgsConstructor
+@Tag(name = "User Profile", description = "Endpoints for managing current user profile and preferences")
+@SecurityRequirement(name = "oauth2")
 public class MeController {
 
   private final UserRepository userRepository;
 
   @GetMapping("/me")
+  @Operation(summary = "Get current user profile", description = "Returns the profile information of the authenticated user")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "User profile retrieved successfully",
+          content = @Content(schema = @Schema(implementation = MeResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Unauthorized - user not authenticated"),
+      @ApiResponse(responseCode = "404", description = "User not found")
+  })
   public ResponseEntity<MeResponse> getMe(@AuthenticationPrincipal OidcUser oidcUser) {
     if (oidcUser == null) {
       return ResponseEntity.status(401).build();
@@ -67,6 +83,13 @@ public class MeController {
       User.UserStatus status) {}
 
   @GetMapping("/me/preferences")
+  @Operation(summary = "Get user preferences", description = "Returns the matchmaking-related preferences for the authenticated user")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Preferences retrieved successfully",
+          content = @Content(schema = @Schema(implementation = MePreferencesResponse.class))),
+      @ApiResponse(responseCode = "401", description = "Unauthorized - user not authenticated"),
+      @ApiResponse(responseCode = "404", description = "User not found")
+  })
   public ResponseEntity<MePreferencesResponse> getPreferences(
       @AuthenticationPrincipal OidcUser oidcUser) {
     if (oidcUser == null) {
@@ -97,6 +120,13 @@ public class MeController {
   }
 
   @PutMapping("/me/preferences")
+  @Operation(summary = "Update user preferences", description = "Updates the matchmaking-related preferences for the authenticated user. All fields are optional.")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Preferences updated successfully"),
+      @ApiResponse(responseCode = "400", description = "Invalid request data"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized - user not authenticated"),
+      @ApiResponse(responseCode = "404", description = "User not found")
+  })
   public ResponseEntity<Void> updatePreferences(
       @AuthenticationPrincipal OidcUser oidcUser, @Valid @RequestBody UserPreferencesDto request) {
     if (oidcUser == null) {
@@ -142,6 +172,13 @@ public class MeController {
   }
 
   @PutMapping("/me/country")
+  @Operation(summary = "Update user country", description = "Allows the authenticated user to update their preferred country code")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Country updated successfully"),
+      @ApiResponse(responseCode = "400", description = "Invalid country code"),
+      @ApiResponse(responseCode = "401", description = "Unauthorized - user not authenticated"),
+      @ApiResponse(responseCode = "404", description = "User not found")
+  })
   public ResponseEntity<Void> updateCountry(
       @AuthenticationPrincipal OidcUser oidcUser, @Valid @RequestBody UpdateCountryDto request) {
     if (oidcUser == null) {

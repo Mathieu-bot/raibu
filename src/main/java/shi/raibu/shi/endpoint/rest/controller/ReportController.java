@@ -3,6 +3,13 @@ package shi.raibu.shi.endpoint.rest.controller;
 import java.time.Instant;
 import java.util.List;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +24,8 @@ import shi.raibu.shi.service.ReputationService;
 @RestController
 @RequestMapping("/reports")
 @AllArgsConstructor
+@Tag(name = "Reports", description = "Endpoints for creating and managing user reports")
+@SecurityRequirement(name = "oauth2")
 public class ReportController {
   private final ReportRepository reportRepository;
   private final UserRepository userRepository;
@@ -24,6 +33,12 @@ public class ReportController {
   private final ReputationService reputationService;
 
   @PostMapping
+  @Operation(summary = "Create a new report", description = "Creates a new report against another user. Auto-bans if user reaches 3 reports.")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "Report created successfully",
+          content = @Content(schema = @Schema(implementation = Report.class))),
+      @ApiResponse(responseCode = "400", description = "Invalid request data")
+  })
   public ResponseEntity<Report> createReport(@Valid @RequestBody CreateReportDto request) {
     Report report =
         Report.builder()
@@ -64,6 +79,10 @@ public class ReportController {
   }
 
   @GetMapping("/pending")
+  @Operation(summary = "Get pending reports", description = "Returns all reports with PENDING status")
+  @ApiResponses(value = {
+      @ApiResponse(responseCode = "200", description = "List of pending reports retrieved successfully")
+  })
   public ResponseEntity<List<Report>> getPendingReports() {
     return ResponseEntity.ok(reportRepository.findByStatus(Report.ReportStatus.PENDING));
   }
