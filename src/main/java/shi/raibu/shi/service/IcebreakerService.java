@@ -66,7 +66,10 @@ public class IcebreakerService {
 
   public String getRandom(String mode) {
     String key = normalizeMode(mode);
-    List<String> list = MODE_ICEBREAKERS.getOrDefault(key, DEFAULT_ICEBREAKERS);
+    List<String> list = key != null ? MODE_ICEBREAKERS.get(key) : null;
+    if (list == null || list.isEmpty()) {
+      list = DEFAULT_ICEBREAKERS;
+    }
     if (list == null || list.isEmpty()) {
       return null;
     }
