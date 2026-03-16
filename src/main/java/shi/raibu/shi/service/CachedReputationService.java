@@ -14,13 +14,15 @@ public class CachedReputationService {
 
   @Cacheable(value = "reputations", key = "#userId")
   public ReputationData getReputationScore(String userId) {
-    return userRepository.findById(userId)
-        .map(user -> new ReputationData(
-            user.getReputationScore(),
-            user.getPositiveFeedbackCount(),
-            user.getNegativeFeedbackCount(),
-            user.getStrikeCount()
-        ))
+    return userRepository
+        .findById(userId)
+        .map(
+            user ->
+                new ReputationData(
+                    user.getReputationScore(),
+                    user.getPositiveFeedbackCount(),
+                    user.getNegativeFeedbackCount(),
+                    user.getStrikeCount()))
         .orElse(null);
   }
 
@@ -34,10 +36,5 @@ public class CachedReputationService {
     // Evict all reputations from cache
   }
 
-  public record ReputationData(
-      int score,
-      int positiveCount,
-      int negativeCount,
-      int strikeCount
-  ) {}
+  public record ReputationData(int score, int positiveCount, int negativeCount, int strikeCount) {}
 }

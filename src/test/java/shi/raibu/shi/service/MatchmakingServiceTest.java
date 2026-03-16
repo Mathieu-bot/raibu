@@ -2,6 +2,7 @@ package shi.raibu.shi.service;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.*;
 
 import java.time.Instant;
@@ -19,8 +20,6 @@ import shi.raibu.shi.model.User;
 import shi.raibu.shi.model.User.UserStatus;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
-
-import static org.mockito.ArgumentMatchers.argThat;
 
 @ExtendWith(MockitoExtension.class)
 class MatchmakingServiceTest {
@@ -84,8 +83,7 @@ class MatchmakingServiceTest {
               .build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(currentUser));
-      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
-          .thenReturn(List.of());
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING)).thenReturn(List.of());
 
       Optional<User> result = matchmakingService.findRandomMatch("user-1");
 
@@ -139,12 +137,7 @@ class MatchmakingServiceTest {
     @Test
     @DisplayName("should set user status to SEARCHING")
     void shouldSetUserStatusToSearching() {
-      User user =
-          User.builder()
-              .id("user-1")
-              .username("user1")
-              .status(UserStatus.IDLE)
-              .build();
+      User user = User.builder().id("user-1").username("user1").status(UserStatus.IDLE).build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
       when(userRepository.save(any(User.class))).thenReturn(user);
@@ -152,45 +145,34 @@ class MatchmakingServiceTest {
       matchmakingService.startSearching("user-1");
 
       verify(userRepository).findById("user-1");
-      verify(userRepository).save(argThat(savedUser -> savedUser.getStatus() == UserStatus.SEARCHING));
+      verify(userRepository)
+          .save(argThat(savedUser -> savedUser.getStatus() == UserStatus.SEARCHING));
     }
 
     @Test
     @DisplayName("should set search mode when provided")
     void shouldSetSearchModeWhenProvided() {
-      User user =
-          User.builder()
-              .id("user-1")
-              .username("user1")
-              .status(UserStatus.IDLE)
-              .build();
+      User user = User.builder().id("user-1").username("user1").status(UserStatus.IDLE).build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
       when(userRepository.save(any(User.class))).thenReturn(user);
 
       matchmakingService.startSearching("user-1", "gaming");
 
-      verify(userRepository)
-          .save(argThat(savedUser -> "gaming".equals(savedUser.getSearchMode())));
+      verify(userRepository).save(argThat(savedUser -> "gaming".equals(savedUser.getSearchMode())));
     }
 
     @Test
     @DisplayName("should normalize search mode to lowercase")
     void shouldNormalizeSearchModeToLowercase() {
-      User user =
-          User.builder()
-              .id("user-1")
-              .username("user1")
-              .status(UserStatus.IDLE)
-              .build();
+      User user = User.builder().id("user-1").username("user1").status(UserStatus.IDLE).build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
       when(userRepository.save(any(User.class))).thenReturn(user);
 
       matchmakingService.startSearching("user-1", "GAMING");
 
-      verify(userRepository)
-          .save(argThat(savedUser -> "gaming".equals(savedUser.getSearchMode())));
+      verify(userRepository).save(argThat(savedUser -> "gaming".equals(savedUser.getSearchMode())));
     }
   }
 
@@ -214,8 +196,7 @@ class MatchmakingServiceTest {
 
       matchmakingService.stopSearching("user-1");
 
-      verify(userRepository)
-          .save(argThat(savedUser -> savedUser.getStatus() == UserStatus.IDLE));
+      verify(userRepository).save(argThat(savedUser -> savedUser.getStatus() == UserStatus.IDLE));
       verify(userRepository).save(argThat(savedUser -> savedUser.getSearchMode() == null));
     }
   }
@@ -245,9 +226,9 @@ class MatchmakingServiceTest {
 
       matchmakingService.endChat("user-1");
 
-      verify(chatSessionRepository).save(argThat(s -> s.getStatus() == ChatSession.SessionStatus.ENDED));
-      verify(userRepository)
-          .save(argThat(savedUser -> savedUser.getStatus() == UserStatus.IDLE));
+      verify(chatSessionRepository)
+          .save(argThat(s -> s.getStatus() == ChatSession.SessionStatus.ENDED));
+      verify(userRepository).save(argThat(savedUser -> savedUser.getStatus() == UserStatus.IDLE));
     }
   }
 

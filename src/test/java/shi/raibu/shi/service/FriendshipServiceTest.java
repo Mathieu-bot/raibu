@@ -27,7 +27,8 @@ class FriendshipServiceTest {
 
   @BeforeEach
   void setUp() {
-    friendshipService = new FriendshipService(friendshipRepository, notificationService, cachedFriendshipService);
+    friendshipService =
+        new FriendshipService(friendshipRepository, notificationService, cachedFriendshipService);
   }
 
   @Nested
@@ -48,11 +49,7 @@ class FriendshipServiceTest {
     @DisplayName("should return existing friendship if already exists")
     void shouldReturnExistingFriendship() {
       Friendship existingFriendship =
-          Friendship.builder()
-              .userId1("user-1")
-              .userId2("user-2")
-              .createdAt(Instant.now())
-              .build();
+          Friendship.builder().userId1("user-1").userId2("user-2").createdAt(Instant.now()).build();
 
       when(friendshipRepository.findByUserId1AndUserId2("user-1", "user-2"))
           .thenReturn(Optional.of(existingFriendship));
@@ -69,11 +66,7 @@ class FriendshipServiceTest {
     @DisplayName("should create new friendship with correct user order")
     void shouldCreateNewFriendshipWithCorrectOrder() {
       Friendship newFriendship =
-          Friendship.builder()
-              .userId1("user-1")
-              .userId2("user-2")
-              .createdAt(Instant.now())
-              .build();
+          Friendship.builder().userId1("user-1").userId2("user-2").createdAt(Instant.now()).build();
 
       when(friendshipRepository.findByUserId1AndUserId2("user-1", "user-2"))
           .thenReturn(Optional.empty());
@@ -83,24 +76,21 @@ class FriendshipServiceTest {
 
       assertNotNull(result);
       verify(friendshipRepository).findByUserId1AndUserId2("user-1", "user-2");
-      verify(friendshipRepository).save(argThat(f -> "user-1".equals(f.getUserId1()) && "user-2".equals(f.getUserId2())));
-      verify(notificationService, times(2)).notifyUser(
-          anyString(),
-          any(shi.raibu.shi.model.Notification.NotificationType.class),
-          anyString(),
-          anyString()
-      );
+      verify(friendshipRepository)
+          .save(argThat(f -> "user-1".equals(f.getUserId1()) && "user-2".equals(f.getUserId2())));
+      verify(notificationService, times(2))
+          .notifyUser(
+              anyString(),
+              any(shi.raibu.shi.model.Notification.NotificationType.class),
+              anyString(),
+              anyString());
     }
 
     @Test
     @DisplayName("should notify both users when friendship is created")
     void shouldNotifyBothUsersWhenFriendshipCreated() {
       Friendship newFriendship =
-          Friendship.builder()
-              .userId1("user-1")
-              .userId2("user-2")
-              .createdAt(Instant.now())
-              .build();
+          Friendship.builder().userId1("user-1").userId2("user-2").createdAt(Instant.now()).build();
 
       when(friendshipRepository.findByUserId1AndUserId2("user-1", "user-2"))
           .thenReturn(Optional.empty());
@@ -108,19 +98,19 @@ class FriendshipServiceTest {
 
       friendshipService.createFriendshipIfAbsent("user-1", "user-2");
 
-      verify(notificationService).notifyUser(
-          eq("user-1"),
-          eq(shi.raibu.shi.model.Notification.NotificationType.MATCH_CONFIRMED),
-          eq("You have a new mutual match."),
-          contains("user-2")
-      );
+      verify(notificationService)
+          .notifyUser(
+              eq("user-1"),
+              eq(shi.raibu.shi.model.Notification.NotificationType.MATCH_CONFIRMED),
+              eq("You have a new mutual match."),
+              contains("user-2"));
 
-      verify(notificationService).notifyUser(
-          eq("user-2"),
-          eq(shi.raibu.shi.model.Notification.NotificationType.MATCH_CONFIRMED),
-          eq("You have a new mutual match."),
-          contains("user-1")
-      );
+      verify(notificationService)
+          .notifyUser(
+              eq("user-2"),
+              eq(shi.raibu.shi.model.Notification.NotificationType.MATCH_CONFIRMED),
+              eq("You have a new mutual match."),
+              contains("user-1"));
     }
   }
 }

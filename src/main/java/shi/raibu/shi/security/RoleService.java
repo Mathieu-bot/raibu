@@ -1,13 +1,12 @@
 package shi.raibu.shi.security;
 
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import shi.raibu.shi.model.Role;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
-
-import java.util.Set;
 
 @Service
 @AllArgsConstructor
@@ -17,15 +16,10 @@ public class RoleService {
   private final UserRepository userRepository;
 
   // Default admin emails (should be moved to configuration)
-  private static final Set<String> DEFAULT_ADMINS = Set.of(
-      "admin@raibu.app",
-      "mathieu@raibu.app"
-  );
+  private static final Set<String> DEFAULT_ADMINS = Set.of("admin@raibu.app", "mathieu@raibu.app");
 
   public Role getUserRole(String userId) {
-    return userRepository.findById(userId)
-        .map(this::determineRole)
-        .orElse(Role.USER);
+    return userRepository.findById(userId).map(this::determineRole).orElse(Role.USER);
   }
 
   public boolean hasRole(String userId, Role requiredRole) {

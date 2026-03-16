@@ -1,11 +1,8 @@
 package shi.raibu.shi.endpoint.rest.controller;
 
-import java.util.List;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +10,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.Notification.NotificationType;
@@ -23,14 +19,16 @@ import shi.raibu.shi.model.Role;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.security.RequireRole;
 import shi.raibu.shi.service.NotificationService;
 import shi.raibu.shi.service.ReputationService;
-import shi.raibu.shi.security.RequireRole;
 
 @RestController
 @RequestMapping("/admin")
 @AllArgsConstructor
-@Tag(name = "Admin Moderation", description = "Administrative endpoints for moderation and user management")
+@Tag(
+    name = "Admin Moderation",
+    description = "Administrative endpoints for moderation and user management")
 @SecurityRequirement(name = "oauth2")
 public class AdminModerationController {
 

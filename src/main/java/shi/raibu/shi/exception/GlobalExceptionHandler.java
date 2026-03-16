@@ -38,26 +38,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   }
 
   @ExceptionHandler({Exception.class})
-  public ResponseEntity<ErrorResponse> handleGenericException(
-      Exception ex, WebRequest request) {
+  public ResponseEntity<ErrorResponse> handleGenericException(Exception ex, WebRequest request) {
     log.error("Unexpected error occurred", ex);
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
         .body(buildErrorResponse("An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR));
   }
 
   private ErrorResponse buildErrorResponse(String message, HttpStatus status) {
-    return new ErrorResponse(
-        Instant.now(),
-        status.value(),
-        status.getReasonPhrase(),
-        message
-    );
+    return new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message);
   }
 
-  public record ErrorResponse(
-      Instant timestamp,
-      int status,
-      String error,
-      String message
-  ) {}
+  public record ErrorResponse(Instant timestamp, int status, String error, String message) {}
 }

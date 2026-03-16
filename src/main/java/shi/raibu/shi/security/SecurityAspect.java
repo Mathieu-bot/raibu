@@ -35,13 +35,15 @@ public class SecurityAspect {
     String userId = oidcUser.getSubject();
 
     if (!roleService.hasRole(userId, requireRole.value())) {
-      log.warn("User {} with email {} attempted to access endpoint requiring role {}",
-          userId, email, requireRole.value());
+      log.warn(
+          "User {} with email {} attempted to access endpoint requiring role {}",
+          userId,
+          email,
+          requireRole.value());
       throw new ForbiddenException("Insufficient permissions");
     }
 
-    log.debug("User {} with email {} authorized for role {}",
-        userId, email, requireRole.value());
+    log.debug("User {} with email {} authorized for role {}", userId, email, requireRole.value());
 
     return joinPoint.proceed();
   }

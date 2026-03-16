@@ -1,14 +1,13 @@
 package shi.raibu.shi.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.servers.Server;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -31,14 +30,15 @@ public class OpenApiConfig {
     contact.setEmail("contact@raibu.app");
     contact.setUrl("https://raibu.app");
 
-    Info info = new Info()
-        .title("Raibu API")
-        .description("Spring Boot backend for Raibu - Random video chat platform with matchmaking, WebRTC signaling, chat, and moderation features.")
-        .version(apiVersion)
-        .contact(contact);
+    Info info =
+        new Info()
+            .title("Raibu API")
+            .description(
+                "Spring Boot backend for Raibu - Random video chat platform with matchmaking,"
+                    + " WebRTC signaling, chat, and moderation features.")
+            .version(apiVersion)
+            .contact(contact);
 
-    return new OpenAPI()
-        .info(info)
-        .servers(List.of(localServer, productionServer));
+    return new OpenAPI().info(info).servers(List.of(localServer, productionServer));
   }
 }

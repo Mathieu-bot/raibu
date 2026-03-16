@@ -13,11 +13,6 @@ public class CacheConfig {
   @Bean
   public CacheManager cacheManager() {
     return new ConcurrentMapCacheManager(
-        "users",
-        "userPreferences",
-        "friends",
-        "reputations",
-        "notifications"
-    );
+        "users", "userPreferences", "friends", "reputations", "notifications");
   }
 }

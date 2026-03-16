@@ -1,7 +1,9 @@
 package shi.raibu.shi.security;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,15 +15,10 @@ import shi.raibu.shi.model.Role;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
 
-import java.util.Optional;
-
-import static org.mockito.Mockito.*;
-
 @ExtendWith(MockitoExtension.class)
 class AdminSecurityTest {
 
-  @Mock
-  private UserRepository userRepository;
+  @Mock private UserRepository userRepository;
 
   private RoleService roleService;
 
@@ -37,10 +34,7 @@ class AdminSecurityTest {
     @Test
     @DisplayName("should identify admin users by email")
     void shouldIdentifyAdminUsersByEmail() {
-      User adminUser = User.builder()
-          .id("admin-1")
-          .email("admin@raibu.app")
-          .build();
+      User adminUser = User.builder().id("admin-1").email("admin@raibu.app").build();
 
       when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser));
 
@@ -51,10 +45,7 @@ class AdminSecurityTest {
     @Test
     @DisplayName("should identify regular users")
     void shouldIdentifyRegularUsers() {
-      User regularUser = User.builder()
-          .id("user-1")
-          .email("user@gmail.com")
-          .build();
+      User regularUser = User.builder().id("user-1").email("user@gmail.com").build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(regularUser));
 
@@ -80,10 +71,7 @@ class AdminSecurityTest {
     @Test
     @DisplayName("should allow admin access to moderator endpoints")
     void shouldAllowAdminAccessToModeratorEndpoints() {
-      User adminUser = User.builder()
-          .id("admin-1")
-          .email("admin@raibu.app")
-          .build();
+      User adminUser = User.builder().id("admin-1").email("admin@raibu.app").build();
 
       when(userRepository.findById("admin-1")).thenReturn(Optional.of(adminUser));
 
@@ -94,10 +82,7 @@ class AdminSecurityTest {
     @Test
     @DisplayName("should allow user access to user endpoints")
     void shouldAllowUserAccessToUserEndpoints() {
-      User regularUser = User.builder()
-          .id("user-1")
-          .email("user@gmail.com")
-          .build();
+      User regularUser = User.builder().id("user-1").email("user@gmail.com").build();
 
       when(userRepository.findById("user-1")).thenReturn(Optional.of(regularUser));
 
@@ -112,10 +97,7 @@ class AdminSecurityTest {
     @Test
     @DisplayName("should include mathieu@raibu.app as default admin")
     void shouldIncludeMathieuAsDefaultAdmin() {
-      User mathieuUser = User.builder()
-          .id("mathieu-1")
-          .email("mathieu@raibu.app")
-          .build();
+      User mathieuUser = User.builder().id("mathieu-1").email("mathieu@raibu.app").build();
 
       when(userRepository.findById("mathieu-1")).thenReturn(Optional.of(mathieuUser));
 
