@@ -117,6 +117,11 @@ jar {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-security:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket:3.2.2'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.2.2'
+    runtimeOnly 'org.postgresql:postgresql:42.7.1'
 
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3'
 
