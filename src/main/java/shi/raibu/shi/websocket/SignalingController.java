@@ -55,6 +55,9 @@ public class SignalingController {
       Principal principal,
       @Payload(required = false) SearchRequest request,
       SimpMessageHeaderAccessor headerAccessor) {
+    if (principal == null) {
+      return;
+    }
     String userId = principal.getName();
     String sessionId = headerAccessor != null ? headerAccessor.getSessionId() : null;
     String mode = request != null ? request.getMode() : null;
@@ -134,15 +137,36 @@ public class SignalingController {
 
   /** Send WebRTC signal (offer, answer, ICE candidate) */
   @MessageMapping("/signal")
-  public void handleSignal(@Payload SignalMessage message) {
-    log.info("Signal {} from {} to {}", message.getType(), message.getFrom(), message.getTo());
+  public void handleSignal(Principal principal, @Payload SignalMessage message) {
+    if (principal == null || message == null) {
+      return;
+    }
 
-    messagingTemplate.convertAndSendToUser(message.getTo(), "/queue/signal", message);
+    String senderId = principal.getName();
+    if (matchmakingService.isUserBanned(senderId)) {
+      log.info("Blocked banned user {} from signaling", senderId);
+      sendErrorToUser(senderId, "USER_BANNED");
+      return;
+    }
+
+    String recipientId = message.getTo();
+    if (recipientId == null || recipientId.isBlank()) {
+      log.warn("Ignoring signal from {} with no recipient", senderId);
+      return;
+    }
+
+    message.setFrom(senderId);
+    log.info("Signal {} from {} to {}", message.getType(), senderId, recipientId);
+
+    messagingTemplate.convertAndSendToUser(recipientId, "/queue/signal", message);
   }
 
   /** Send text chat message during an active session */
   @MessageMapping("/chat")
   public void sendChatMessage(Principal principal, @Payload ChatInboundMessage inbound) {
+    if (principal == null) {
+      return;
+    }
     String senderId = principal.getName();
     String recipientId = inbound.getTo();
     log.info("Chat message from {} to {}", senderId, recipientId);
@@ -219,6 +243,9 @@ public class SignalingController {
   /** Send direct message (DM) between friends, independent of active chat sessions */
   @MessageMapping("/dm")
   public void sendDirectMessage(Principal principal, @Payload ChatInboundMessage inbound) {
+    if (principal == null) {
+      return;
+    }
     String senderId = principal.getName();
     String recipientId = inbound.getTo();
     log.info("Direct message from {} to {}", senderId, recipientId);
@@ -273,6 +300,9 @@ public class SignalingController {
   /** Skip to the next user ("Next" button) */
   @MessageMapping("/next")
   public void nextUser(Principal principal) {
+    if (principal == null) {
+      return;
+    }
     String userId = principal.getName();
     log.info("User {} wants to skip to next", userId);
 
@@ -290,6 +320,9 @@ public class SignalingController {
   /** Stop searching */
   @MessageMapping("/stop")
   public void stopSearching(Principal principal) {
+    if (principal == null) {
+      return;
+    }
     String userId = principal.getName();
     log.info("User {} stopped searching", userId);
     matchmakingService.stopSearching(userId);
