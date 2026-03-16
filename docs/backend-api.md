@@ -589,14 +589,8 @@ Currently, the backend emits notifications for the following events:
 - **Auto-ban after multiple reports** (when a user reaches the report threshold and is auto-banned):
   - Type: `USER_BANNED`.
   - Message: `"Your account has been banned due to multiple reports."`.
-- **Mutual match / friendship created** (when both users liked each other in a session):
-  - Type: `MATCH_CONFIRMED`.
-  - Message: `"You have a new mutual match."`.
-  - `data` contains a small JSON string with the `friendId`.
-- **New direct message received** (when a friend sends a DM):
-  - Type: `NEW_DM`.
-  - Message: `"You have a new message."`.
-  - `data` contains a small JSON string with the `senderId` and `directMessageId`:
+  - For mutual matches / friends, a `MATCH_CONFIRMED` notification is emitted with a message like `"You have a new mutual match."` and `data` containing a small JSON with `friendId`.
+  - For new direct messages (DM) between friends, a `NEW_DM` notification is emitted for the recipient with a message like `"You have a new message."` and `data` containing a small JSON with `senderId` and `directMessageId`:
     ```json
     {
       "senderId": "<senderId>",

@@ -41,16 +41,3 @@ out/
 
 ### Mac OS ###
 .DS_Store
-
-### terraform ###
-*.tfstate
-*.tfstate.backup
-.terraform/
-terraform.tfvars
-*.auto.tfvars 
-
-# Local AWS CLI artifacts (not project code)
-infrastructure/terraform/aws/
-infrastructure/terraform/awscliv2.zip
-
-.env
