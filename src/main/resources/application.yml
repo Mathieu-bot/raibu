@@ -41,4 +41,4 @@ server:
 
 # for WebSocket
 cors:
-  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,https://raibu.app}
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://raibu.app}
