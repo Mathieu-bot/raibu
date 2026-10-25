@@ -38,8 +38,8 @@ public class SecurityConfig {
                     .authenticated())
         .oauth2Login(
             oauth2 ->
-                oauth2.userInfoEndpoint(
-                        userInfo -> userInfo.oidcUserService(customOidcUserService))
+                oauth2
+                    .userInfoEndpoint(userInfo -> userInfo.oidcUserService(customOidcUserService))
                     .defaultSuccessUrl(frontendUrl + "/home", true))
         .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl(frontendUrl + "/login"));
 
