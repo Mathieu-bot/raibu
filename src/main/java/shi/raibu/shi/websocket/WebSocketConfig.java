@@ -10,7 +10,7 @@ import org.springframework.web.socket.config.annotation.*;
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-  @Value("${cors.allowed-origins:http://localhost:3000,https://raibu.app}")
+  @Value("${cors.allowed-origins}")
   private String allowedOrigins;
 
   @Override
