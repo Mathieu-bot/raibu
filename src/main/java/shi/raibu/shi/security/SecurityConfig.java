@@ -20,10 +20,10 @@ public class SecurityConfig {
 
   private final CustomOidcUserService customOidcUserService;
 
-  @Value("${app.frontend-url:http://localhost:5173}")
+  @Value("${app.frontend-url}")
   private String frontendUrl;
 
-  @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000,https://raibu.app}")
+  @Value("${cors.allowed-origins}")
   private String allowedOrigins;
 
   @Bean
@@ -38,8 +38,8 @@ public class SecurityConfig {
                     .authenticated())
         .oauth2Login(
             oauth2 ->
-                oauth2.userInfoEndpoint(
-                        userInfo -> userInfo.oidcUserService(customOidcUserService))
+                oauth2
+                    .userInfoEndpoint(userInfo -> userInfo.oidcUserService(customOidcUserService))
                     .defaultSuccessUrl(frontendUrl + "/home", true))
         .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl(frontendUrl + "/login"));
 
