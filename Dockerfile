@@ -39,7 +39,7 @@ WORKDIR /app
 
 # Copy the built JAR file from the build stage
 # This copies only the necessary artifact, keeping the final image small
-COPY --from=build /app/build/libs/*.jar app.jar
+COPY --from=build /app/build/libs/app.jar app.jar
 
 # Expose port 8080 for the Spring Boot application
 # This is the default port configured in application.yml

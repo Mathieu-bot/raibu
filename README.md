@@ -1,6 +1,6 @@
-# Raibu Backend
+# Raibu - API
 
-Spring Boot backend for Raibu (matchmaking + WebRTC signaling + chat + moderation + notifications).
+Spring Boot api for Raibu (matchmaking + WebRTC signaling + chat + moderation + notifications).
 
 ## Requirements
 
