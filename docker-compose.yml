@@ -23,7 +23,8 @@ services:
       DATABASE_USERNAME: raibu_admin
       DATABASE_PASSWORD: raibu_password
       PORT: 8080
-      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     ports:
       - "8080:8080"
     restart: unless-stopped

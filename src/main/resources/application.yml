@@ -34,11 +34,20 @@ spring:
               - email
         provider:
           google:
-            issuer-uri: https://accounts.google.com
+            issuer-uri: ${GOOGLE_ISSUER_URI:https://accounts.google.com}
 
 server:
   port: ${PORT:8080}
 
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+
 # for WebSocket
 cors:
-  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:3000,https://raibu.app}
+  allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,https://raibu.app}
+
+raibu:
+  api:
+    local-url: ${API_LOCAL_URL:http://localhost:8080}
+    production-url: ${API_PRODUCTION_URL:https://api.raibu.app}
+    contact-url: ${CONTACT_URL:https://raibu.app}

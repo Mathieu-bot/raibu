@@ -15,20 +15,29 @@ public class OpenApiConfig {
   @Value("${raibu.api.version:1.0.0}")
   private String apiVersion;
 
+  @Value("${raibu.api.local-url}")
+  private String localUrl;
+
+  @Value("${raibu.api.production-url}")
+  private String productionUrl;
+
+  @Value("${raibu.api.contact-url}")
+  private String contactUrl;
+
   @Bean
   public OpenAPI raibuOpenAPI() {
     Server localServer = new Server();
-    localServer.setUrl("http://localhost:8080");
+    localServer.setUrl(localUrl);
     localServer.setDescription("Local development server");
 
     Server productionServer = new Server();
-    productionServer.setUrl("https://api.raibu.app");
+    productionServer.setUrl(productionUrl);
     productionServer.setDescription("Production server");
 
     Contact contact = new Contact();
     contact.setName("Raibu Team");
     contact.setEmail("contact@raibu.app");
-    contact.setUrl("https://raibu.app");
+    contact.setUrl(contactUrl);
 
     Info info =
         new Info()
