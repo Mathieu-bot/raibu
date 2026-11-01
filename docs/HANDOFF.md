@@ -2,7 +2,30 @@
 
 Read this first, then `docs/PLAN_PRODUCTION.md` (the plan: finding IDs `F-xx`, streams `S0..S4`, per-PR acceptance criteria).
 Everything in the repo (code, comments, commits, PRs, docs) is written in **English**; the owner chats in French.
-Last updated: 2026-11-01.
+Last updated: 2026-11-01 (after the production readiness work, see Status).
+
+## Status (2026-11-01, end of the production readiness work)
+All streams are merged into `preprod` (PRs #24 to #75). `prod` was not touched: `preprod -> prod` needs the owner's explicit go.
+- S0 pipeline: #24 ignore env files, #25 gate docker and deploy behind tests, #31 restore flyway, #37 remove lambda/ses/health email,
+  #62 non-root Dockerfile, #68 remove terraform/ecs, #70 keepalive, #71 rollback, #72 boot-check job.
+- S1 web security: #36 forwarded headers and secure cookie, #41 401 instead of redirect, #51 CSRF cookie and `/csrf`, #55 public routes and CORS,
+  #56 rate limiter constructor fix, #60 banned user filter, #63 fixed 400 bodies, #66 rate limiter purge, #74 Hikari idle timeout.
+- S2 identity: #27 admin role from principal, #29 `ADMIN_EMAILS`, #32 verified e-mail, #35 keep country, #38 public user profile, #44 report author and validation,
+  #52 flagged queue, #57 pending reports admin only, #65 ban ends the chat, #69 report status rules.
+- S3a realtime: #26 signals only in active sessions, #28 frame and rate limits, #30 `/next` re-queues, #34 disconnect grace, #39 chat length, #59 friend call signals, #61 presence listener constructor fix.
+- S3b domain: #33 atomic matching, #40 endChat for both users, #45 feedback, #58 atomic reputation updates, #64 input bounds, #67 index and pagination.
+- S4 docs: #42, #43, #46 to #50, #53, #54, #73, #75 (`docs/API.md`, `DEPLOYMENT.md`, `ARCHITECTURE.md`, `SECURITY.md`, README).
+
+Deliberately NOT done:
+- Testcontainers startup test against a real Postgres.
+- `?before=<instant>` cursor on paginated lists (only `?limit=`, default 50, max 100).
+- Shared rate limiting: both rate limiters are per instance and in memory. The REST limiter keys anonymous traffic by `getRemoteAddr()`, which is the real client IP behind the proxy because `forward-headers-strategy` is `native`.
+- End-to-end STOMP test (the realtime flow is covered by unit tests only).
+- Nothing was run against live Render/Neon: owner actions listed in `docs/DEPLOYMENT.md` remain (Neon, Render, GitHub environments, Google redirect URIs).
+
+Lessons:
+- Two websocket beans failed at startup because a class had two constructors and no `@Autowired` (#56, #61). Any new Spring bean with two constructors needs `@Autowired` on one.
+- Gradle runs take 3 to 10 minutes on this machine: use the slot script (rule 8 of the plan), never two builds at once.
 
 ## What this project is
 Spring Boot 3.2.2 / Java 21 backend for an Omegle-like random chat app: Google OIDC login (session cookie), matchmaking,
