@@ -3,9 +3,11 @@ package shi.raibu.shi.model;
 import jakarta.persistence.*;
 import java.time.Instant;
 import lombok.*;
+import org.hibernate.annotations.DynamicUpdate;
 
 @Entity
 @Table(name = "\"user\"")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor
