@@ -10,4 +10,8 @@ public interface ReportRepository extends JpaRepository<Report, String> {
   List<Report> findByReportedUserId(String reportedUserId);
 
   List<Report> findByStatus(Report.ReportStatus status);
+
+  /** A null {@code sessionId} matches reports without a session ({@code is null}). */
+  boolean existsByReporterIdAndReportedUserIdAndSessionId(
+      String reporterId, String reportedUserId, String sessionId);
 }
