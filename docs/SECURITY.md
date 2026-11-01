@@ -1,8 +1,7 @@
 # Security and moderation guide
 
 How access control, moderation and abuse protection work in the backend, and what is deliberately not done. For the client-facing
-contract (status codes, payloads) see `docs/API.md`. Items tagged **in flight** are decided and being merged by other work streams: check
-the code or `gh pr list --state merged` for their state.
+contract (status codes, payloads) see `docs/API.md`.
 
 ## 1. Authentication
 
@@ -30,8 +29,7 @@ the code or `gh pr list --state merged` for their state.
 - Never remove `@RequireRole` to make a test pass.
 
 Admin endpoints (all `ADMIN`): `GET /admin/reports`, `GET /admin/users/{id}/reports`, `GET /admin/users/{id}/sessions`,
-`PUT /admin/reports/{id}/status`, `PUT /admin/users/{id}/ban`. `GET /admin/reports/flagged` is the moderation queue (section 3); `GET /reports/pending` is covered
-in section 3 (**in flight**).
+`PUT /admin/reports/{id}/status`, `PUT /admin/users/{id}/ban`. `GET /admin/reports/flagged` is the moderation queue and `GET /reports/pending` lists pending reports (admin only); see section 3.
 
 ## 3. Reports and moderation
 
@@ -46,16 +44,16 @@ There is **no automatic ban**. Moderation is human.
 3. An admin reviews reports (`GET /admin/reports?status=PENDING`, `GET /admin/users/{id}/reports`, `GET /admin/users/{id}/sessions`). Chat history
    (`GET /sessions/{id}/messages`) is limited to the two participants, so admins judge from the report data and the session list.
 4. `PUT /admin/reports/{id}/status` with `REVIEWED` or `ACTIONED`. Transition to `ACTIONED` adds a strike (`strike_count + 1`), -20 reputation, and notifies the reporter
-   (`REPORT_ACTIONED`). Repeating the same status must not repeat side effects (**in flight**).
+   (`REPORT_ACTIONED`). A missing status is a `400`; re-sending the current status is a no-op, so strikes and notifications are never repeated.
 5. `PUT /admin/users/{id}/ban` with `{"banned": true|false}`. Banning sets `banned`, caps reputation at -50 and notifies the user (`USER_BANNED`); unbanning notifies
-   (`USER_UNBANNED`). Ending the banned user's current chat on ban is **in flight**.
+   (`USER_UNBANNED`). Banning also ends the user's current chat (`endChat`), so the peer gets `PEER_DISCONNECTED`.
 
 ### What a ban does
 
 - STOMP: search, signal, chat, DM and next are refused with `ERROR USER_BANNED` on `/user/queue/match`.
 - Matching: banned users are excluded from candidates and a claim re-checks the ban under lock.
-- REST: today the ban is not enforced on REST. **In flight**: a filter returns `403 {"code":"USER_BANNED"}` on every REST call except `GET /me`, `/logout`, `/ping`,
-  `/login/**`, `/oauth2/**`, with one primary-key lookup per request and no cache so a ban is immediate.
+- REST: `BannedUserFilter` returns `403 {"code":"USER_BANNED"}` on every REST call except `GET /me`, `GET /csrf`, `/logout`, `/ping`, `/login/**`, `/oauth2/**`,
+  with one primary-key lookup per request and no cache so a ban is immediate.
 - The ban flag is not cleared by logging in again: it lives on the user row.
 
 ### Reputation
@@ -75,7 +73,7 @@ are not matched at all. Feedback is accepted once per user per session and only 
 | Report description | 1000 characters | `400` |
 
 Limits are fixed windows kept in memory, **per instance**; they reset on restart. The REST limiter keys anonymous traffic by `getRemoteAddr()`, which is the
-real client IP because forwarded headers are honored. REST limiter memory is bounded by a scheduled purge (**in flight**).
+real client IP because forwarded headers are honored. REST limiter memory is bounded by a scheduled purge of expired windows.
 
 ## 5. CSRF and CORS
 
@@ -88,8 +86,8 @@ real client IP because forwarded headers are honored. REST limiter memory is bou
 
 ## 6. Realtime protections
 
-- `/app/signal` relays only between two users who share an `ACTIVE` chat session; otherwise `ERROR NO_ACTIVE_SESSION`. The `from` field is overwritten with the real sender.
-- `/app/chat` requires an active session with the recipient; `/app/dm` requires a friendship (`ERROR NOT_FRIENDS`).
+- `/app/signal` relays only between two users who share an `ACTIVE` chat session, except `OFFER`, `ANSWER`, `ICE_CANDIDATE` and `CALL_*` between two friends (friend calls); otherwise `ERROR NO_ACTIVE_SESSION`. The `from` field is overwritten with the real sender.
+- `/ws/**` requires a signed-in session. `/app/chat` requires an active session with the recipient; `/app/dm` requires a friendship (`ERROR NOT_FRIENDS`).
 - A user is in at most one active session; claims are done under ordered pessimistic locks (see `docs/ARCHITECTURE.md`).
 - Disconnect handling releases users after a 10 s grace period so no ghost `SEARCHING`/`IN_CHAT` user stays in the pool.
 
@@ -100,7 +98,7 @@ real client IP because forwarded headers are honored. REST limiter memory is bou
 - `POST /users/register` and `PUT /users/{id}/session` were removed.
 - Session history and messages are restricted to the participants; DMs to the two friends; notifications to their owner.
 - Error responses: validation and service errors return a short message; unexpected errors return a generic 500 body. Stack traces are logged, not returned
-  (raw exception messages still reach clients for some `400`s, **in flight** to be replaced by fixed messages).
+  Raw `IllegalArgumentException`/`IllegalStateException` become `400 {"code":"BAD_REQUEST"}`; the message is only logged.
 - Swagger UI and `/v3/api-docs` are disabled with profile `prod` and need a session otherwise.
 - Secrets (`GOOGLE_CLIENT_SECRET`, `DATABASE_PASSWORD`) come from environment variables only. `.env` is git-ignored.
 

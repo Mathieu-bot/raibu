@@ -54,10 +54,10 @@ State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`, including `/logout`) 
 
 A banned user (`banned: true` in `GET /me`) is blocked from the REST API and from every STOMP action:
 
-- REST: `403` with `{"code":"USER_BANNED"}` on every endpoint except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**`,
-  so the frontend can still read `banned` and show a message. (See section 9: ban filter status.)
+- REST: `403` with `{"code":"USER_BANNED"}` on every endpoint except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**`, `GET /csrf`,
+  so the frontend can still read `banned` and show a message. The ban is read from the database on every request, so it applies immediately.
 - STOMP: the frame is dropped and an `ERROR` message with `data: "USER_BANNED"` is sent on `/user/queue/match`.
-- When an admin bans a user in an active chat, the chat is ended and the peer receives `PEER_DISCONNECTED` (see section 9).
+- When an admin bans a user in an active chat, the chat is ended and the peer receives `PEER_DISCONNECTED` on `/user/queue/match`.
 
 ### CORS
 
@@ -73,13 +73,13 @@ Allowed methods `GET, POST, PUT, DELETE, OPTIONS`, all headers, credentials allo
 | Banned user | 403 | `{"code":"USER_BANNED"}` |
 | CSRF missing/invalid | 403 | `{"code":"CSRF_INVALID"}` |
 | Insufficient role (`@RequireRole`) | 403 | `{"timestamp","status":403,"error":"Forbidden","message":"Insufficient permissions"}` |
-| Bad argument / state (`IllegalArgumentException`, `IllegalStateException` from services) | 400 | `{"timestamp","status":400,"error":"Bad Request","message":"<text>"}` |
+| Bad argument / state (`IllegalArgumentException`, `IllegalStateException` that reach the global handler) | 400 | `{"code":"BAD_REQUEST"}` (fixed body, details are only logged). Several endpoints return a 400 with an empty body instead. |
 | Not found | 404 | usually empty body; `ResourceNotFoundException` gives the JSON shape above |
 | Bean validation failure on a `@Valid` body | 400 | Spring `ProblemDetail`-style JSON (unverified exact shape) |
 | Rate limit exceeded | 429 | empty body |
 | Unexpected | 500 | `{"timestamp","status":500,"error":"Internal Server Error","message":"An unexpected error occurred"}` |
 
-Messages of the 400 shape come from the service layer and may change: switch on the status code, not on the text.
+Switch on the status code (and `code` when present), never on message text.
 
 ### REST rate limits
 
@@ -128,7 +128,7 @@ All endpoints below require a session unless stated. `{id}` values are user/sess
 ```
 
 Notes: `email` is returned only for the caller's own profile. Lists are stored as comma separated text, so list items must not contain a
-comma. Limits (list size, item length, country pattern) are being tightened, see section 9. Sending an empty list leaves the
+comma. Limits: each list has at most 10 items, `preferredLanguages` items at most 15 characters, other items 50 (interests) / 20 (genders) characters, `gender` at most 20, `countryCode` must match `^[A-Za-z]{2}$`. Violations give `400`. Sending an empty list leaves the
 stored value unchanged.
 
 ### Users
@@ -146,8 +146,8 @@ A session is one pairing of two users. `MATCH_FOUND` does not carry the session 
 
 | Method | Path | Request | Response |
 |---|---|---|---|
-| GET | `/sessions/me` | none | `200` `ChatSession[]` where the caller is `user1Id` or `user2Id` |
-| GET | `/sessions/{sessionId}/messages` | none | `200` `ChatMessage[]` oldest first; `404` unknown session; `403` caller not in the session |
+| GET | `/sessions/me` | none | `200` `ChatSession[]` where the caller is `user1Id` or `user2Id`, **newest first** (`?limit=`, see below) |
+| GET | `/sessions/{sessionId}/messages` | none | `200` `ChatMessage[]`: the newest `limit` messages, returned oldest first (`?limit=`); `404` unknown session; `403` caller not in the session |
 | POST | `/sessions/{sessionId}/feedback` | `{"liked": true}` | `200` empty; `404`; `403` not a participant; `409` session still `ACTIVE` |
 
 ```jsonc
@@ -163,10 +163,12 @@ Feedback: only once the session is `ENDED` (end the chat with `/app/next` or wai
 
 ### Friends and direct messages
 
+**Pagination:** `/friends`, `/friends/{id}/messages`, `/sessions/me` and `/sessions/{id}/messages` accept `?limit=` (default 50, maximum 100, values below 1 fall back to 50). The response stays a plain JSON array. There is no `before` cursor yet: to read older history than 100 items is not possible today. `/notifications` has its own `limit` (1 to 100, default 50). Admin lists are not paginated.
+
 | Method | Path | Request | Response |
 |---|---|---|---|
-| GET | `/friends` | none | `200` `[{"userId":"uuid","createdAt":"..."}]` (`userId` is the friend; fetch the profile with `/users/{id}`) |
-| GET | `/friends/{friendId}/messages` | none | `200` `DirectMessage[]` oldest first; `403` if not friends |
+| GET | `/friends` | none | `200` `[{"userId":"uuid","createdAt":"..."}]` newest friendship first (`?limit=`) (`userId` is the friend; fetch the profile with `/users/{id}`) |
+| GET | `/friends/{friendId}/messages` | none | `200` `DirectMessage[]`: the newest `limit` messages, returned oldest first (`?limit=`); `403` if not friends |
 | POST | `/friends/{friendId}/messages` | `{"content":"hi"}` | `200` `DirectMessage`; `400` blank/self; `403` not friends |
 
 ```jsonc
@@ -174,7 +176,7 @@ Feedback: only once the session is `ENDED` (end the chat with `/app/next` or wai
 { "id": "uuid", "senderId": "uuid", "recipientId": "uuid", "content": "hi", "sentAt": "..." }
 ```
 
-Content is trimmed. Maximum length and pagination: see section 9. Sending a DM creates a `NEW_DM` notification for the recipient.
+Content is trimmed, at most 2000 characters (`400` above). Sending a DM creates a `NEW_DM` notification for the recipient.
 The same DM can be sent in real time over STOMP (`/app/dm`).
 
 ### Notifications
@@ -198,7 +200,7 @@ The same DM can be sent in real time over STOMP (`/app/dm`).
 | Method | Path | Role | Request | Response |
 |---|---|---|---|---|
 | POST | `/reports` | user | `CreateReport` | `200` `Report`; `400` self-report or reported user not in the session; `403` caller not in the session; `404` unknown user or session; `409` already reported (same target and session) |
-| GET | `/reports/pending` | admin (see section 9) | none | `200` `Report[]` with status `PENDING` |
+| GET | `/reports/pending` | admin | none | `200` `Report[]` with status `PENDING` |
 
 ```jsonc
 // CreateReport
@@ -221,16 +223,16 @@ Admins are the users whose Google e-mail is listed in the `ADMIN_EMAILS` environ
 | GET | `/admin/reports/flagged?minReporters=3&days=7` | both optional | `200` `[{"userId","distinctReporters","reportCount","lastReportAt"}]` (`minReporters` clamped to 1..100, `days` to 1..365, ordered by distinct reporters desc) |
 | GET | `/admin/users/{userId}/reports` | none | `200` `Report[]` |
 | GET | `/admin/users/{userId}/sessions` | none | `200` `ChatSession[]` |
-| PUT | `/admin/reports/{reportId}/status` | `{"status":"ACTIONED"}` | `200` empty; `404` |
+| PUT | `/admin/reports/{reportId}/status` | `{"status":"ACTIONED"}` | `200` empty; `400` if `status` is missing; `404`. Re-sending the current status is a no-op `200` |
 | PUT | `/admin/users/{userId}/ban` | `{"banned":true}` | `200` empty; `404` |
 
-Moving a report to `ACTIONED` adds a strike and -20 reputation to the reported user and notifies the reporter (`REPORT_ACTIONED`).
-Banning sets reputation to at most -50 and sends `USER_BANNED`; unbanning sends `USER_UNBANNED`.
+Moving a report to `ACTIONED` adds a strike and -20 reputation to the reported user and notifies the reporter (`REPORT_ACTIONED`), only on the transition to `ACTIONED` (never repeated).
+Banning sets reputation to at most -50, sends `USER_BANNED` and ends the user's active chat (the peer gets `PEER_DISCONNECTED`); unbanning sends `USER_UNBANNED`.
 
 ## 4. WebSocket (STOMP over SockJS)
 
 - Endpoint: `{API}/ws` with SockJS (`new SockJS(API + '/ws')`; use `https://` in production, the client upgrades to `wss://`).
-  The browser sends the session cookie, so the user must be signed in first. Allowed origins = `ALLOWED_ORIGINS`.
+  The handshake requires a signed-in session (the browser sends the cookie); without one it answers `401`. Allowed origins = `ALLOWED_ORIGINS`.
 - Broker prefixes: server -> client `/queue` and `/topic`; client -> server `/app`.
 - Per-user messages arrive on `/user/queue/...` (subscribe to exactly that string).
 - STOMP heartbeats are not configured server side (SockJS keeps the connection alive; unverified under Render's idle timeout).
@@ -278,7 +280,7 @@ icebreakers: `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movi
 | `OFFER` | client -> peer, via `/app/signal`, delivered on `/user/queue/signal` | SDP offer. Opaque to the server (any JSON, typically `{"type":"offer","sdp":"..."}`). |
 | `ANSWER` | same | SDP answer |
 | `ICE_CANDIDATE` | same | ICE candidate (`RTCIceCandidateInit`) |
-| `CALL_INVITE`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_END` | same | Defined in the enum and relayed like any signal, but the server attaches no meaning. **Known limitation:** `/app/signal` only relays between users sharing an `ACTIVE` session, so these cannot be used for calls between friends once their random chat has ended (the reply is `NO_ACTIVE_SESSION`). Friend calls need a backend change. |
+| `CALL_INVITE`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_END` | client -> peer, via `/app/signal`, delivered on `/user/queue/signal` | Free-form. The server attaches no meaning. |
 | `CHAT_TEXT` | server -> both users, `/user/queue/chat` | `{"sessionId","senderId","content","sentAt"}` (`from` = sender, `to` = recipient) |
 | `DM_TEXT` | server -> both users, `/user/queue/dm` | `{"id","senderId","recipientId","content","sentAt"}` |
 
@@ -287,13 +289,13 @@ icebreakers: `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movi
 | Code | Cause |
 |---|---|
 | `USER_BANNED` | The user is banned (search, signal, chat, dm, next). |
-| `NO_ACTIVE_SESSION` | `/app/signal` or `/app/chat` to a user the caller shares no `ACTIVE` session with. Nothing is relayed. |
+| `NO_ACTIVE_SESSION` | `/app/chat` or `/app/signal` to a user the caller shares no `ACTIVE` session with (for `/app/signal`, unless it is a friend call signal). Nothing is relayed. |
 | `MESSAGE_TOO_LONG` | Chat content longer than 2000 characters after trimming. Nothing is stored. |
 | `NOT_FRIENDS` | `/app/dm` to someone who is not a friend. |
 | `RATE_LIMITED` | More than 100 SEND frames in 10 s. The frame is dropped. |
 
 Silently ignored (no error): chat/DM with a blank recipient, null or blank content, signal with no `to`, DM to self or longer than allowed
-(see section 9).
+(DM content over 2000 characters is also dropped silently over STOMP; the REST endpoint returns `400`).
 
 ### Limits
 
@@ -314,7 +316,7 @@ Silently ignored (no error): chat/DM with a blank recipient, null or blank conte
   (page reload, another tab) cancels the release. After reconnecting, re-subscribe to all queues; the server does not resend
   `MATCH_FOUND`, so use `GET /sessions/me` to detect an `ACTIVE` session.
 - A user who only stops with `/app/stop` is `IDLE` and not matched.
-- Ban by an admin: the chat of the banned user is ended (section 9).
+- Ban by an admin: the chat of the banned user is ended and the peer receives `PEER_DISCONNECTED`.
 
 ### WebRTC signaling sequence
 
@@ -335,8 +337,8 @@ A (offerer)                    server                          B
    |<------------------------- relay ----------------------------->|
 ```
 
-Use STUN/TURN servers of your choice: the backend provides none (ICE server config lives in the frontend). Signals are only relayed
-while the two users share an `ACTIVE` session; otherwise the sender gets `NO_ACTIVE_SESSION`.
+Use STUN/TURN servers of your choice: the backend provides none (ICE server config lives in the frontend). Signals are relayed
+while the two users share an `ACTIVE` session. **Friend calls:** `OFFER`, `ANSWER`, `ICE_CANDIDATE` and `CALL_INVITE|ACCEPT|REJECT|CALL_END` are also relayed between two users who are friends, without any active session (the same sequence applies, started by `CALL_INVITE`). Every other signal type still needs an `ACTIVE` session; otherwise the sender gets `NO_ACTIVE_SESSION`.
 
 ## 5. Matching rules (what the frontend can expect)
 
@@ -408,24 +410,6 @@ client.send('/app/dm', {}, JSON.stringify({ to: friends[0].userId, content: 'hey
 
 ## 8. Unverified
 
-- Exact JSON of bean-validation `400` errors.
+- Exact JSON of bean-validation `400` errors (Spring's default handler, not customized).
 - Behavior of the SockJS transport when a frame exceeds 64 KB and under Render's idle connection timeout.
 - All flows were read from the code; none were run against a live instance.
-
-## 9. Changes in flight
-
-These are decided and being merged into `preprod` by other work streams. Until they land, the current behavior is given. Treat the
-"target" column as the contract to code against; this section is removed once everything is deployed.
-
-| Topic | Today on `preprod` | Target contract |
-|---|---|---|
-| Ban on REST | Only STOMP actions check the ban | `403 {"code":"USER_BANNED"}` on all REST except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**` |
-| `/ws/**` auth | Handshake is public; an unauthenticated STOMP client has no principal and its frames are ignored | Handshake requires a session (`401` otherwise) |
-| `GET /reports/pending` | Any signed-in user | Admin only |
-| `PUT /admin/reports/{id}/status` | Accepts null, repeats side effects | `status` required; side effects only on the transition to `ACTIONED` |
-| Admin ban | Sets the flag only | Also ends the user's active chat (peer gets `PEER_DISCONNECTED`) |
-| Pagination | `/friends`, DM history, `/sessions/me`, session messages return everything | Same JSON array shape, `limit` (default 50, max 100) |
-| Input limits | Lists and DM content unbounded (DB overflow gives `500`) | Preference lists max 10 items, DM content max 2000 characters |
-| Error bodies | 400 bodies echo internal exception messages | Fixed messages, `409` for conflicts |
-
-Check `gh pr list --state merged` on the repository for what has already landed.
