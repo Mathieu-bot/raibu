@@ -1,8 +1,12 @@
 package shi.raibu.shi.service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.AllArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import shi.raibu.shi.model.DirectMessage;
 import shi.raibu.shi.model.Notification.NotificationType;
@@ -19,11 +23,19 @@ public class DirectMessageService {
   private final FriendshipRepository friendshipRepository;
   private final NotificationService notificationService;
 
-  public List<DirectMessage> getConversation(String currentUserId, String friendId) {
+  /** The newest {@code limit} messages of the conversation, returned oldest first. */
+  public List<DirectMessage> getConversation(String currentUserId, String friendId, int limit) {
     ensureFriendship(currentUserId, friendId);
-    return directMessageRepository
-        .findBySenderIdAndRecipientIdOrSenderIdAndRecipientIdOrderBySentAtAsc(
-            currentUserId, friendId, friendId, currentUserId);
+    List<DirectMessage> newestFirst =
+        new ArrayList<>(
+            directMessageRepository.findBySenderIdAndRecipientIdOrSenderIdAndRecipientId(
+                currentUserId,
+                friendId,
+                friendId,
+                currentUserId,
+                PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "sentAt"))));
+    Collections.reverse(newestFirst);
+    return newestFirst;
   }
 
   public DirectMessage sendMessage(String senderId, String recipientId, String content) {

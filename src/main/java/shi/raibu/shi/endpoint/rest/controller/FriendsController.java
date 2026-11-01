@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shi.raibu.shi.model.DirectMessage;
 import shi.raibu.shi.model.Friendship;
@@ -26,14 +27,17 @@ public class FriendsController {
   private final DirectMessageService directMessageService;
 
   @GetMapping
-  public ResponseEntity<List<FriendResponse>> getFriends(Principal principal) {
+  public ResponseEntity<List<FriendResponse>> getFriends(
+      Principal principal, @RequestParam(required = false) Integer limit) {
     if (principal == null) {
       return ResponseEntity.status(401).build();
     }
 
     String userId = principal.getName();
 
-    List<Friendship> friendships = friendshipRepository.findByUserId1OrUserId2(userId, userId);
+    List<Friendship> friendships =
+        friendshipRepository.findByUserId1OrUserId2(
+            userId, userId, PageLimits.newestFirst(limit, "createdAt"));
 
     List<FriendResponse> friends =
         friendships.stream()
@@ -50,7 +54,9 @@ public class FriendsController {
 
   @GetMapping("/{friendId}/messages")
   public ResponseEntity<List<DirectMessageResponse>> getMessages(
-      Principal principal, @PathVariable String friendId) {
+      Principal principal,
+      @PathVariable String friendId,
+      @RequestParam(required = false) Integer limit) {
     if (principal == null) {
       return ResponseEntity.status(401).build();
     }
@@ -58,7 +64,8 @@ public class FriendsController {
     String userId = principal.getName();
 
     try {
-      List<DirectMessage> messages = directMessageService.getConversation(userId, friendId);
+      List<DirectMessage> messages =
+          directMessageService.getConversation(userId, friendId, PageLimits.clamp(limit));
       List<DirectMessageResponse> response =
           messages.stream()
               .map(

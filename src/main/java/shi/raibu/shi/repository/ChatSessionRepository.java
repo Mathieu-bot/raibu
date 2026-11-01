@@ -4,6 +4,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,8 @@ import shi.raibu.shi.model.ChatSession;
 @Repository
 public interface ChatSessionRepository extends JpaRepository<ChatSession, String> {
   List<ChatSession> findByUser1IdOrUser2Id(String user1Id, String user2Id);
+
+  List<ChatSession> findByUser1IdOrUser2Id(String user1Id, String user2Id, Pageable pageable);
 
   Optional<ChatSession> findByUser1IdAndUser2IdAndStatus(
       String user1Id, String user2Id, ChatSession.SessionStatus status);
