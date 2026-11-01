@@ -6,6 +6,8 @@ spring:
     hikari:
       maximum-pool-size: 5
       minimum-idle: 0
+      # Must stay below max-lifetime, otherwise Hikari disables it. Closing idle connections lets Neon suspend.
+      idle-timeout: 120000
       max-lifetime: 240000
       connection-timeout: 20000
 
