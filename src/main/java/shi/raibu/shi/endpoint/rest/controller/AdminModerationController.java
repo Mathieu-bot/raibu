@@ -2,6 +2,8 @@ package shi.raibu.shi.endpoint.rest.controller;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -10,7 +12,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import shi.raibu.shi.endpoint.rest.dto.FlaggedUserDto;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.Notification.NotificationType;
 import shi.raibu.shi.model.Report;
@@ -45,6 +49,17 @@ public class AdminModerationController {
       return ResponseEntity.ok(reportRepository.findByStatus(status));
     }
     return ResponseEntity.ok(reportRepository.findAll());
+  }
+
+  @GetMapping("/reports/flagged")
+  @RequireRole(Role.ADMIN)
+  public ResponseEntity<List<FlaggedUserDto>> getFlaggedUsers(
+      @RequestParam(defaultValue = "3") int minReporters,
+      @RequestParam(defaultValue = "7") int days) {
+    int min = Math.max(1, Math.min(minReporters, 100));
+    int window = Math.max(1, Math.min(days, 365));
+    Instant since = Instant.now().minus(window, ChronoUnit.DAYS);
+    return ResponseEntity.ok(reportRepository.findFlaggedUsers(since, min));
   }
 
   @GetMapping("/users/{userId}/reports")
