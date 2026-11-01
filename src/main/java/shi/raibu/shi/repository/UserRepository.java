@@ -38,6 +38,33 @@ public interface UserRepository extends JpaRepository<User, String> {
   List<String> findIdsByIdInAndStatusAndBannedFalse(
       @Param("ids") Collection<String> ids, @Param("status") User.UserStatus status);
 
+  @Modifying(flushAutomatically = true)
+  @Query(
+      "update User u set u.positiveFeedbackCount = u.positiveFeedbackCount + 1,"
+          + " u.reputationScore = case when u.reputationScore + 1 > 100 then 100"
+          + " else u.reputationScore + 1 end where u.id = :id")
+  int applyPositiveFeedback(@Param("id") String id);
+
+  @Modifying(flushAutomatically = true)
+  @Query(
+      "update User u set u.negativeFeedbackCount = u.negativeFeedbackCount + 1,"
+          + " u.reputationScore = case when u.reputationScore - 3 < -100 then -100"
+          + " else u.reputationScore - 3 end where u.id = :id")
+  int applyNegativeFeedback(@Param("id") String id);
+
+  @Modifying(flushAutomatically = true)
+  @Query(
+      "update User u set u.strikeCount = u.strikeCount + 1,"
+          + " u.reputationScore = case when u.reputationScore - 20 < -100 then -100"
+          + " else u.reputationScore - 20 end where u.id = :id")
+  int applyActionedReport(@Param("id") String id);
+
+  @Modifying(flushAutomatically = true)
+  @Query(
+      "update User u set u.reputationScore = case when u.reputationScore > -50 then -50"
+          + " else u.reputationScore end where u.id = :id")
+  int applyBanReputation(@Param("id") String id);
+
   @Modifying(flushAutomatically = true, clearAutomatically = true)
   @Query("update User u set u.status = :status, u.lastActiveAt = :now where u.id in :ids")
   int updateStatusByIdIn(
