@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
@@ -39,6 +40,7 @@ public class WebSocketPresenceListener {
    * Uses a private scheduler so it never competes with other {@code TaskScheduler} beans of the
    * application.
    */
+  @Autowired
   public WebSocketPresenceListener(MatchmakingService matchmakingService) {
     this.matchmakingService = matchmakingService;
     this.ownedScheduler = new ThreadPoolTaskScheduler();
