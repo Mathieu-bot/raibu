@@ -7,11 +7,20 @@ on:
       - "prod"
   workflow_dispatch:
 
+# One deployment per environment at a time; a running deployment is never cancelled midway.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   IMAGE: tafitamathieu/raibu
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,6 +28,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -31,6 +43,8 @@ jobs:
         with:
           context: .
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ env.IMAGE }}:${{ github.ref_name }}
             ${{ env.IMAGE }}:${{ github.sha }}
@@ -41,13 +55,41 @@ jobs:
     environment: ${{ github.ref_name }}
 
     steps:
+      # Render-specific step: isolated so the hosting provider can be replaced.
       - name: Trigger Render deploy
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL not set, skipping (Render must pull ${IMAGE}:${GITHUB_REF_NAME} itself)."
-            exit 0
+            echo "::error::RENDER_DEPLOY_HOOK_URL is not set for the ${GITHUB_REF_NAME} environment."
+            exit 1
           fi
           IMG_URL="docker.io%2F${IMAGE//\//%2F}%3A${GITHUB_SHA}"
           curl --fail -sS -X POST "${RENDER_DEPLOY_HOOK_URL}&imgURL=${IMG_URL}"
+
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: ${{ github.ref_name }}
+
+    steps:
+      - name: Wait for /ping to answer 200
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::notice::APP_URL is not set for the ${GITHUB_REF_NAME} environment, skipping the smoke test."
+            exit 0
+          fi
+          deadline=$((SECONDS + 300))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL%/}/ping" || true)
+            echo "GET ${APP_URL%/}/ping -> ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${APP_URL%/}/ping did not return 200 within 5 minutes."
+          exit 1
