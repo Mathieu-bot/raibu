@@ -21,9 +21,11 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import shi.raibu.shi.model.ChatSession;
+import shi.raibu.shi.model.Friendship;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatMessageRepository;
 import shi.raibu.shi.repository.ChatSessionRepository;
+import shi.raibu.shi.repository.FriendshipRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.DirectMessageService;
 import shi.raibu.shi.service.IcebreakerService;
@@ -41,6 +43,7 @@ class SignalingControllerTest {
   @Mock UserRepository userRepository;
   @Mock IcebreakerService icebreakerService;
   @Mock DirectMessageService directMessageService;
+  @Mock FriendshipRepository friendshipRepository;
   @InjectMocks SignalingController controller;
 
   Principal alice = () -> "alice";
@@ -151,5 +154,46 @@ class SignalingControllerTest {
         .convertAndSendToUser(eq("alice"), eq("/queue/match"), error.capture());
     assertEquals(SignalMessage.SignalType.ERROR, error.getValue().getType());
     assertEquals("NO_ACTIVE_SESSION", error.getValue().getData());
+  }
+
+  @Test
+  void friendsCanExchangeCallSignalsWithoutActiveSession() {
+    when(chatSessionRepository.findByUser1IdAndUser2IdAndStatus(any(), any(), any()))
+        .thenReturn(Optional.empty());
+    when(friendshipRepository.findByUserId1AndUserId2("alice", "bob"))
+        .thenReturn(Optional.of(new Friendship()));
+
+    SignalMessage invite =
+        SignalMessage.builder().type(SignalMessage.SignalType.CALL_INVITE).to("bob").build();
+    controller.handleSignal(alice, invite);
+
+    verify(messagingTemplate).convertAndSendToUser("bob", "/queue/signal", invite);
+  }
+
+  @Test
+  void nonFriendsCannotSendCallSignalsWithoutActiveSession() {
+    when(chatSessionRepository.findByUser1IdAndUser2IdAndStatus(any(), any(), any()))
+        .thenReturn(Optional.empty());
+    when(friendshipRepository.findByUserId1AndUserId2(any(), any())).thenReturn(Optional.empty());
+
+    controller.handleSignal(
+        alice,
+        SignalMessage.builder().type(SignalMessage.SignalType.CALL_INVITE).to("mallory").build());
+
+    verify(messagingTemplate, never()).convertAndSendToUser(eq("mallory"), any(), any());
+  }
+
+  @Test
+  void friendsCannotForgeSystemSignalTypes() {
+    when(chatSessionRepository.findByUser1IdAndUser2IdAndStatus(any(), any(), any()))
+        .thenReturn(Optional.empty());
+    when(friendshipRepository.findByUserId1AndUserId2(any(), any()))
+        .thenReturn(Optional.of(new Friendship()));
+
+    controller.handleSignal(
+        alice,
+        SignalMessage.builder().type(SignalMessage.SignalType.MATCH_FOUND).to("bob").build());
+
+    verify(messagingTemplate, never()).convertAndSendToUser(eq("bob"), any(), any());
   }
 }
