@@ -50,6 +50,43 @@ class SecurityConfigTest {
   }
 
   @Test
+  void pingIsPublic() throws Exception {
+    mvc.perform(get("/ping")).andExpect(status().isOk());
+  }
+
+  @Test
+  void websocketEndpointRequiresAuthentication() throws Exception {
+    mvc.perform(get("/ws/info")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/ws/info").session(CsrfTest.loggedInSession("u1"))).andExpect(status().isOk());
+  }
+
+  @Test
+  void swaggerAndApiDocsRequireAuthentication() throws Exception {
+    mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/v3/api-docs")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void actuatorIsNoLongerPermitted() throws Exception {
+    mvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void corsAllowsConfiguredOriginOnly() throws Exception {
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/me")
+                .header("Origin", "http://localhost:5173")
+                .header("Access-Control-Request-Method", "GET"))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options("/me")
+                .header("Origin", "https://evil.example")
+                .header("Access-Control-Request-Method", "GET"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
   void oauth2AuthorizationEndpointStillRedirectsToGoogle() throws Exception {
     mvc.perform(get("/oauth2/authorization/google").accept(MediaType.TEXT_HTML))
         .andExpect(status().isFound())

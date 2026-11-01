@@ -64,11 +64,7 @@ public class SecurityConfig {
                     .ignoringRequestMatchers("/ws/**"))
         .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
         .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers("/ping", "/actuator/**", "/ws/**")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
+            auth -> auth.requestMatchers("/ping").permitAll().anyRequest().authenticated())
         .exceptionHandling(
             ex ->
                 ex.authenticationEntryPoint(authenticationEntryPoint())
