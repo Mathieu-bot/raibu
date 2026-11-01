@@ -30,7 +30,7 @@ the code or `gh pr list --state merged` for their state.
 - Never remove `@RequireRole` to make a test pass.
 
 Admin endpoints (all `ADMIN`): `GET /admin/reports`, `GET /admin/users/{id}/reports`, `GET /admin/users/{id}/sessions`,
-`PUT /admin/reports/{id}/status`, `PUT /admin/users/{id}/ban`. `GET /reports/pending` and `GET /admin/reports/flagged` are covered
+`PUT /admin/reports/{id}/status`, `PUT /admin/users/{id}/ban`. `GET /admin/reports/flagged` is the moderation queue (section 3); `GET /reports/pending` is covered
 in section 3 (**in flight**).
 
 ## 3. Reports and moderation
@@ -41,7 +41,7 @@ There is **no automatic ban**. Moderation is human.
    and optionally `sessionId`. The author is always the authenticated user (a `reporterId` in the body is ignored). Rules: the target must exist and not be the reporter;
    a `sessionId` must exist and include both users; one report per (reporter, target, session), the second gives `409`. A database unique index backs the last rule.
    Status `PENDING`.
-2. **Moderation queue (in flight)**: `GET /admin/reports/flagged?minReporters=3&days=7` lists users reported by at least 3 **distinct** reporters in the last 7 days, with
+2. **Moderation queue**: `GET /admin/reports/flagged?minReporters=3&days=7` lists users reported by at least 3 **distinct** reporters in the last 7 days, with
    `distinctReporters`, `reportCount`, `lastReportAt`. Counting distinct reporters stops one person from flagging someone by spamming.
 3. An admin reviews reports (`GET /admin/reports?status=PENDING`, `GET /admin/users/{id}/reports`, `GET /admin/users/{id}/sessions`). Chat history
    (`GET /sessions/{id}/messages`) is limited to the two participants, so admins judge from the report data and the session list.
