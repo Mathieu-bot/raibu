@@ -35,8 +35,7 @@ class GlobalExceptionHandlerTest {
       var response = exceptionHandler.handleBadRequestExceptions(exception, webRequest);
 
       assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-      assertEquals(HttpStatus.BAD_REQUEST.value(), response.getBody().status());
-      assertEquals("Invalid input parameter", response.getBody().message());
+      assertEquals("BAD_REQUEST", response.getBody().code());
     }
 
     @Test
@@ -47,8 +46,8 @@ class GlobalExceptionHandlerTest {
       var response = exceptionHandler.handleBadRequestExceptions(exception, webRequest);
 
       assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-      assertEquals(HttpStatus.BAD_REQUEST.value(), response.getBody().status());
-      assertEquals("Invalid state for operation", response.getBody().message());
+      assertEquals("BAD_REQUEST", response.getBody().code());
+      assertFalse(response.getBody().toString().contains("Invalid state for operation"));
     }
   }
 
