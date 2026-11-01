@@ -218,7 +218,7 @@ Admins are the users whose Google e-mail is listed in the `ADMIN_EMAILS` environ
 | Method | Path | Request | Response |
 |---|---|---|---|
 | GET | `/admin/reports?status=PENDING` | `status` optional | `200` `Report[]` |
-| GET | `/admin/reports/flagged?minReporters=3&days=7` | both optional | `200` `[{"userId","distinctReporters","reportCount","lastReportAt"}]` (see section 9) |
+| GET | `/admin/reports/flagged?minReporters=3&days=7` | both optional | `200` `[{"userId","distinctReporters","reportCount","lastReportAt"}]` (`minReporters` clamped to 1..100, `days` to 1..365, ordered by distinct reporters desc) |
 | GET | `/admin/users/{userId}/reports` | none | `200` `Report[]` |
 | GET | `/admin/users/{userId}/sessions` | none | `200` `ChatSession[]` |
 | PUT | `/admin/reports/{reportId}/status` | `{"status":"ACTIONED"}` | `200` empty; `404` |
@@ -422,7 +422,6 @@ These are decided and being merged into `preprod` by other work streams. Until t
 | Ban on REST | Only STOMP actions check the ban | `403 {"code":"USER_BANNED"}` on all REST except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**` |
 | `/ws/**` auth | Handshake is public; an unauthenticated STOMP client has no principal and its frames are ignored | Handshake requires a session (`401` otherwise) |
 | `GET /reports/pending` | Any signed-in user | Admin only |
-| `GET /admin/reports/flagged` | Does not exist | Admin queue of users with >= `minReporters` (default 3) distinct reporters in the last `days` (default 7) |
 | `PUT /admin/reports/{id}/status` | Accepts null, repeats side effects | `status` required; side effects only on the transition to `ACTIONED` |
 | Admin ban | Sets the flag only | Also ends the user's active chat (peer gets `PEER_DISCONNECTED`) |
 | Pagination | `/friends`, DM history, `/sessions/me`, session messages return everything | Same JSON array shape, `limit` (default 50, max 100) |
