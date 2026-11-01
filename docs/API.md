@@ -145,7 +145,7 @@ A session is one pairing of two users. `MATCH_FOUND` does not carry the session 
 |---|---|---|---|
 | GET | `/sessions/me` | none | `200` `ChatSession[]` where the caller is `user1Id` or `user2Id` |
 | GET | `/sessions/{sessionId}/messages` | none | `200` `ChatMessage[]` oldest first; `404` unknown session; `403` caller not in the session |
-| POST | `/sessions/{sessionId}/feedback` | `{"liked": true}` | `200` empty; `404`; `403` not a participant |
+| POST | `/sessions/{sessionId}/feedback` | `{"liked": true}` | `200` empty; `404`; `403` not a participant; `409` session still `ACTIVE` |
 
 ```jsonc
 // ChatSession
@@ -154,9 +154,9 @@ A session is one pairing of two users. `MATCH_FOUND` does not carry the session 
 { "id": "uuid", "sessionId": "uuid", "senderId": "uuid", "content": "hello", "sentAt": "..." }
 ```
 
-Feedback: one per user per session (a second submit is ignored). `liked: true` gives the peer +1 reputation, `false` gives -3
+Feedback: only once the session is `ENDED` (end the chat with `/app/next` or wait for `PEER_DISCONNECTED` first). One per user per session (a second submit returns `200` and is ignored). `liked: true` gives the peer +1 reputation, `false` gives -3
 (clamped to [-100, 100]). When **both** users liked each other in the same session a friendship is created and both receive a
-`MATCH_CONFIRMED` notification. Feedback rules (only after the session ended) are listed in section 9.
+`MATCH_CONFIRMED` notification.
 
 ### Friends and direct messages
 
@@ -194,7 +194,7 @@ The same DM can be sent in real time over STOMP (`/app/dm`).
 
 | Method | Path | Role | Request | Response |
 |---|---|---|---|---|
-| POST | `/reports` | user | `CreateReport` | `200` `Report` |
+| POST | `/reports` | user | `CreateReport` | `200` `Report`; `400` self-report or reported user not in the session; `403` caller not in the session; `404` unknown user or session; `409` already reported (same target and session) |
 | GET | `/reports/pending` | admin (see section 9) | none | `200` `Report[]` with status `PENDING` |
 
 ```jsonc
@@ -206,8 +206,7 @@ The same DM can be sent in real time over STOMP (`/app/dm`).
   "description": null, "createdAt": "...", "status": "PENDING" } // PENDING | REVIEWED | ACTIONED
 ```
 
-There is **no automatic ban**. The report author is the authenticated user (a `reporterId` in the body is ignored once the report
-hardening is deployed, see section 9). Users reported by at least 3 distinct people within 7 days appear in the admin queue.
+There is **no automatic ban**. The report author is the authenticated user (a `reporterId` in the body is ignored). The reported user must exist and differ from the caller; a `sessionId`, if given, must include both users. Users reported by at least 3 distinct people within 7 days appear in the admin queue.
 
 ### Admin (role `ADMIN`, else `403`)
 
@@ -276,7 +275,7 @@ icebreakers: `english_practice`, `gaming`, `coworking`, `travel`, `music`, `movi
 | `OFFER` | client -> peer, via `/app/signal`, delivered on `/user/queue/signal` | SDP offer. Opaque to the server (any JSON, typically `{"type":"offer","sdp":"..."}`). |
 | `ANSWER` | same | SDP answer |
 | `ICE_CANDIDATE` | same | ICE candidate (`RTCIceCandidateInit`) |
-| `CALL_INVITE`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_END` | same | Defined in the enum and relayed like any signal, but the server attaches no meaning. Free for the frontend to use. |
+| `CALL_INVITE`, `CALL_ACCEPT`, `CALL_REJECT`, `CALL_END` | same | Defined in the enum and relayed like any signal, but the server attaches no meaning. **Known limitation:** `/app/signal` only relays between users sharing an `ACTIVE` session, so these cannot be used for calls between friends once their random chat has ended (the reply is `NO_ACTIVE_SESSION`). Friend calls need a backend change. |
 | `CHAT_TEXT` | server -> both users, `/user/queue/chat` | `{"sessionId","senderId","content","sentAt"}` (`from` = sender, `to` = recipient) |
 | `DM_TEXT` | server -> both users, `/user/queue/dm` | `{"id","senderId","recipientId","content","sentAt"}` |
 
@@ -419,12 +418,10 @@ These are decided and being merged into `preprod` by other work streams. Until t
 | CSRF cookie | Spring default: token kept in the session, **no readable cookie**, so a cross-origin SPA cannot send it | Cookie `XSRF-TOKEN` (not HttpOnly) issued on a plain `GET` (e.g. `/me`), header `X-XSRF-TOKEN` on `POST`/`PUT`/`DELETE`; `/ws/**` exempt |
 | Ban on REST | Only STOMP actions check the ban | `403 {"code":"USER_BANNED"}` on all REST except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**` |
 | `/ws/**` auth | Handshake is public; an unauthenticated STOMP client has no principal and its frames are ignored | Handshake requires a session (`401` otherwise) |
-| `POST /reports` | Body `reporterId` is trusted; auto-ban at 3 reports | Author = caller; target must exist, not self, `sessionId` must include the caller; one report per (reporter, target, session); **no auto-ban** |
 | `GET /reports/pending` | Any signed-in user | Admin only |
 | `GET /admin/reports/flagged` | Does not exist | Admin queue of users with >= `minReporters` (default 3) distinct reporters in the last `days` (default 7) |
 | `PUT /admin/reports/{id}/status` | Accepts null, repeats side effects | `status` required; side effects only on the transition to `ACTIONED` |
 | Admin ban | Sets the flag only | Also ends the user's active chat (peer gets `PEER_DISCONNECTED`) |
-| Feedback | Accepted on `ACTIVE` sessions; double submit may give `500` | Only for `ENDED` sessions (`409` otherwise); double submit returns `200`, ignored |
 | Pagination | `/friends`, DM history, `/sessions/me`, session messages return everything | Same JSON array shape, `limit` (default 50, max 100) |
 | Input limits | Lists and DM content unbounded (DB overflow gives `500`) | Preference lists max 10 items, DM content max 2000 characters |
 | Error bodies | 400 bodies echo internal exception messages | Fixed messages, `409` for conflicts |
