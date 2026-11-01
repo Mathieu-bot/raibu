@@ -57,3 +57,8 @@ terraform/
 
 # GitHub workflows
 .github/
+
+# Archives and jars (the Gradle wrapper jar is still needed)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.zip
