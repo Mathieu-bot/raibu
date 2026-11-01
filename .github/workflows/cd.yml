@@ -49,8 +49,66 @@ jobs:
             ${{ env.IMAGE }}:${{ github.ref_name }}
             ${{ env.IMAGE }}:${{ github.sha }}
 
-  deploy:
+  boot-check:
     needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # The published image must start on an empty database before anything is deployed.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: raibu
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d raibu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Start the image against an empty database
+        run: |
+          docker run -d --name raibu-boot-check --network host \
+            -e DATABASE_URL=jdbc:postgresql://localhost:5432/raibu \
+            -e DATABASE_USERNAME=ci \
+            -e DATABASE_PASSWORD=ci \
+            -e GOOGLE_CLIENT_ID=ci-placeholder \
+            -e GOOGLE_CLIENT_SECRET=ci-placeholder \
+            -e SPRING_PROFILES_ACTIVE=prod \
+            -e PORT=8080 \
+            "${IMAGE}:${GITHUB_SHA}"
+
+      - name: Wait for /ping to answer 200
+        run: |
+          deadline=$((SECONDS + 240))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8080/ping || true)
+            echo "GET /ping -> ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' raibu-boot-check)" != "true" ]; then
+              break
+            fi
+            sleep 5
+          done
+          echo "::error::The image did not start and answer /ping with 200."
+          docker logs raibu-boot-check | tail -60
+          exit 1
+
+  deploy:
+    needs: boot-check
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name }}
 
