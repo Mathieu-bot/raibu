@@ -1,0 +1,21 @@
+name: Keepalive
+
+# Pings the production service so the free Render instance does not sleep.
+# GitHub cron is best effort and can drift or skip runs; UptimeRobot (5 minute interval) is an optional second pinger.
+# preprod is never pinged on purpose: it is allowed to sleep to save free instance hours.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: ${{ vars.PROD_URL != '' }}
+    steps:
+      # --max-time 90 tolerates a cold start of the sleeping instance (about one minute)
+      - name: Ping production
+        env:
+          PROD_URL: ${{ vars.PROD_URL }}
+        run: curl --fail --silent --show-error --max-time 90 "${PROD_URL%/}/ping"
