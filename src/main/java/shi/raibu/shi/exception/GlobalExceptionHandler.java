@@ -14,11 +14,11 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
-  public ResponseEntity<ErrorResponse> handleBadRequestExceptions(
+  public ResponseEntity<BadRequestResponse> handleBadRequestExceptions(
       Exception ex, WebRequest request) {
-    log.warn("Bad request: {}", ex.getMessage());
-    return ResponseEntity.badRequest()
-        .body(buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST));
+    // The raw message is internal: log it, never send it to the client.
+    log.error("Unhandled bad request exception", ex);
+    return ResponseEntity.badRequest().body(new BadRequestResponse("BAD_REQUEST"));
   }
 
   @ExceptionHandler({ResourceNotFoundException.class})
@@ -47,6 +47,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   private ErrorResponse buildErrorResponse(String message, HttpStatus status) {
     return new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), message);
   }
+
+  /** Fixed body for raw IllegalArgumentException / IllegalStateException. */
+  public record BadRequestResponse(String code) {}
 
   public record ErrorResponse(Instant timestamp, int status, String error, String message) {}
 }
