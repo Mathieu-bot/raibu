@@ -4,9 +4,7 @@ Two environments, `preprod` and `prod`, each with its own Neon database, its own
 A push to the `preprod` or `prod` branch builds a Docker image after the tests pass and tells Render to deploy it.
 Nothing in the code hardcodes a domain: every URL comes from environment variables.
 
-Items marked **(owner action)** cannot be automated and must be done once in the provider consoles. Items marked **(planned)** are
-delivered by pipeline work that was still being merged when this document was written: check `.github/workflows/` and the
-`Dockerfile` before relying on them.
+Items marked **(owner action)** cannot be automated and must be done once in the provider consoles.
 
 ## 1. Environment variables
 
@@ -26,7 +24,7 @@ Set in the Render service (Environment tab). Names come from `src/main/resources
 | `ADMIN_EMAILS` | recommended | `a@x.com,b@y.com` | Comma separated, trimmed, case-insensitive. Users signing in with these e-mails get role `ADMIN`. Empty means nobody is admin. |
 | `SESSION_COOKIE_SAME_SITE` | no | `none` (default in prod) | `none` works when the frontend is on another site (requires HTTPS, already `Secure`). Use `lax` once the frontend and API share the same site. |
 | `PORT` | set by Render | `10000` | Listening port (`server.port`). Default `8080`. Do not set it manually on Render. |
-| `JAVA_TOOL_OPTIONS` | no | `-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:TieredStopAtLevel=1` | JVM flags for the 512 MB free instance. **(planned)** baked into the Dockerfile; set it in Render only to override. |
+| `JAVA_TOOL_OPTIONS` | no | `-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:TieredStopAtLevel=1` | JVM flags for the 512 MB free instance. Already baked into the Dockerfile (the container also runs as a non-root user); set it in Render only to override. |
 | `GOOGLE_ISSUER_URI` | no | `https://accounts.google.com` | Leave as is. |
 | `API_LOCAL_URL`, `API_PRODUCTION_URL`, `CONTACT_URL` | no | see `application.yml` | Only used to fill the OpenAPI metadata (disabled in prod). |
 
@@ -36,7 +34,7 @@ Never put a secret in the repository. `.env` is for local use only and is git-ig
 
 Create **two projects** (free plan): `raibu-preprod` and `raibu-prod`.
 
-1. Create the project, keep the default database (`neondb`) and role.
+1. Create the project and choose **PostgreSQL 16** (recommended; the boot check and tests use 16). Flyway 9.22.3 officially supports up to PG 15 and logs a warning on 16; the migrations are plain DDL and were verified on 16.11. Keep the default database (`neondb`) and role.
 2. In the connection details select the **direct** endpoint (host without `-pooler`). Flyway and Hibernate use session features
    that the transaction pooler can break. Switch to the pooled host only if the 5 connection limit becomes a problem.
 3. Build `DATABASE_URL` from the host: `jdbc:postgresql://<host>/<db>?sslmode=require`. Give username and password in
@@ -68,7 +66,7 @@ exact immutable image, not a moving tag.
   **1 minute** (cold start: JVM + Flyway check) and open WebSocket connections are lost on sleep.
 - All free services of a workspace share **750 instance hours per month**. One service awake 24/7 is about 744 h, so only **prod** is
   kept awake. Do not ping preprod.
-- Keepalive for prod: workflow `keepalive.yml` **(planned)** calls `GET $PROD_URL/ping` every 10 minutes (curl timeout 90 s to
+- Keepalive for prod: workflow `keepalive.yml` calls `GET $PROD_URL/ping` every 10 minutes (curl timeout 90 s to
   tolerate a cold start) and runs only when the repository variable `PROD_URL` is set. GitHub cron can drift or be skipped under load,
   so UptimeRobot (HTTP monitor on `/ping`, 5 minutes) is an optional second pinger.
 - Free tiers change often: re-check Render's and Neon's pricing pages if something behaves differently.
@@ -80,9 +78,11 @@ Workflows in `.github/workflows/`:
 | File | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push on any branch except `preprod`/`prod`, PR to `prod`, `workflow_call` | Job `test` (`./gradlew test`) and job `format` (`./format.sh && git diff --exit-code`). |
-| `cd.yml` | push on `preprod` / `prod`, manual | `test` (calls `ci.yml`), then `build` (Docker image pushed to Docker Hub as `:<branch>` and `:<sha>`), then `deploy` (Render hook, fails if the secret is empty), then `smoke-test` (polls `$APP_URL/ping` for up to 5 minutes; skipped with a notice when `APP_URL` is unset). One deployment per branch at a time. |
-| `keepalive.yml` **(planned)** | every 10 minutes, manual | Pings production, see above. |
-| rollback workflow **(planned)** | manual | See section 7. |
+| `cd.yml` | push on `preprod` / `prod`, manual | `test` (calls `ci.yml`), then `build` (Docker image pushed to Docker Hub as `:<branch>` and `:<sha>`), then `boot-check` (starts the pushed `:<sha>` image with profile `prod` against a throwaway `postgres:16-alpine` service and waits up to 4 minutes for `/ping` to answer 200; a broken image never reaches Render), then `deploy` (Render hook, fails if the secret is empty), then `smoke-test` (polls `$APP_URL/ping` for up to 5 minutes; skipped with a notice when `APP_URL` is unset). One deployment per branch at a time. |
+| `keepalive.yml` | every 10 minutes, manual | Pings `$PROD_URL/ping` (skipped when `PROD_URL` is unset), see above. |
+| `rollback.yml` | manual | Redeploys an older image, see section 7. |
+
+Chain on a push to `preprod`/`prod`: `test` -> `build` -> `boot-check` -> `deploy` -> `smoke-test`.
 
 ### GitHub environments **(owner action)**
 
@@ -122,12 +122,9 @@ URIs.
 3. The push on `prod` runs the same pipeline: tests, image `:prod` and `:<sha>`, Render prod deploy, smoke test on `PROD_URL`.
 4. Check `/ping` and a login on prod. If it is broken, roll back (section 7).
 
-## 7. Rollback **(planned workflow)**
+## 7. Rollback
 
-A manual workflow (`workflow_dispatch`) takes two inputs, `environment` (`preprod` or `prod`) and `sha`, and calls the same Render
-hook with `imgURL=docker.io/tafitamathieu/raibu:<sha>`. Every deployed commit stays available on Docker Hub as `:<sha>`, so pick the
-last good commit from the Actions history. Until the workflow exists you can do it by hand: in the Render service, Manual Deploy,
-Deploy an existing image, tag `<sha>`; or `curl -X POST "$RENDER_DEPLOY_HOOK_URL&imgURL=docker.io%2Ftafitamathieu%2Fraibu%3A<sha>"`.
+Actions, **Rollback**, Run workflow, with two inputs: `environment` (`preprod` or `prod`) and `sha` (the **full 40 character** lowercase commit SHA of the image to restore; anything else is rejected). It calls the Render hook of that environment with `imgURL=docker.io/tafitamathieu/raibu:<sha>` and then runs the smoke test on `APP_URL`. Every deployed commit stays on Docker Hub as `:<sha>`, so pick the last good SHA from the `Build and Deploy` history. Manual fallback: in the Render service, Manual Deploy, Deploy an existing image, tag `<sha>`.
 Rolling back the image does not roll back the database: migrations are additive, so an older image still runs on a newer schema.
 
 ## 8. First deployment checklist
