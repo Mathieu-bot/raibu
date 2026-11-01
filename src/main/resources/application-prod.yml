@@ -1,0 +1,24 @@
+# Activated with SPRING_PROFILES_ACTIVE=prod (Render + Neon).
+# DATABASE_URL must look like jdbc:postgresql://<host>/<db>?sslmode=require
+# and DATABASE_USERNAME / DATABASE_PASSWORD are provided separately (never inside the URL).
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 0
+      max-lifetime: 240000
+      connection-timeout: 20000
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+        # None + Secure works same-site and cross-site over HTTPS; use "lax" once the front shares the API's site.
+        same-site: ${SESSION_COOKIE_SAME_SITE:none}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

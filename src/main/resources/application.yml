@@ -38,6 +38,8 @@ spring:
 
 server:
   port: ${PORT:8080}
+  # native: Tomcat reads X-Forwarded-* so redirect URIs and getRemoteAddr() reflect the real client behind the proxy
+  forward-headers-strategy: native
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
