@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import shi.raibu.shi.model.ChatSession;
@@ -70,63 +71,140 @@ class MatchmakingServiceTest {
       verifyNoInteractions(chatSessionRepository);
     }
 
-    @Test
-    @DisplayName("should return empty when no searching users available")
-    void shouldReturnEmptyWhenNoSearchingUsers() {
-      User currentUser =
-          User.builder()
-              .id("user-1")
-              .username("user1")
-              .banned(false)
-              .status(UserStatus.IDLE)
-              .countryCode("FR")
-              .build();
+    private User searching(String id) {
+      return User.builder()
+          .id(id)
+          .username(id)
+          .banned(false)
+          .status(UserStatus.SEARCHING)
+          .preferSameCountry(false)
+          .build();
+    }
 
-      when(userRepository.findById("user-1")).thenReturn(Optional.of(currentUser));
-      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING)).thenReturn(List.of());
-
-      Optional<User> result = matchmakingService.findRandomMatch("user-1");
-
-      assertTrue(result.isEmpty());
+    private void stubClaim(List<String> claimable) {
+      when(userRepository.findAllByIdInOrderById(any())).thenReturn(List.of());
+      when(userRepository.findIdsByIdInAndStatusAndBannedFalse(any(), eq(UserStatus.SEARCHING)))
+          .thenReturn(claimable);
     }
 
     @Test
-    @DisplayName("should create chat session when match is found")
-    void shouldCreateChatSessionWhenMatchFound() {
-      User currentUser =
-          User.builder()
-              .id("user-1")
-              .username("user1")
-              .banned(false)
-              .status(UserStatus.IDLE)
-              .countryCode("FR")
-              .preferSameCountry(false)
-              .build();
+    @DisplayName("should return empty when the caller is not searching")
+    void shouldReturnEmptyWhenCallerNotSearching() {
+      User caller = searching("user-1");
+      caller.setStatus(UserStatus.IN_CHAT);
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(caller));
 
-      User searchingUser =
-          User.builder()
-              .id("user-2")
-              .username("user2")
-              .banned(false)
-              .status(UserStatus.SEARCHING)
-              .countryCode("US")
-              .build();
+      assertTrue(matchmakingService.findRandomMatch("user-1").isEmpty());
+      verifyNoInteractions(chatSessionRepository);
+    }
 
-      when(userRepository.findById("user-1")).thenReturn(Optional.of(currentUser));
+    @Test
+    @DisplayName("should return empty when no searching users available")
+    void shouldReturnEmptyWhenNoSearchingUsers() {
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(searching("user-1")));
       when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
-          .thenReturn(List.of(searchingUser));
+          .thenReturn(List.of(searching("user-1")));
+
+      assertTrue(matchmakingService.findRandomMatch("user-1").isEmpty());
+      verify(userRepository, never()).findAllByIdInOrderById(any());
+    }
+
+    @Test
+    @DisplayName("should claim both users, close stale sessions and create one session")
+    void shouldClaimBothUsersAndCreateSession() {
+      User caller = searching("user-1");
+      User other = searching("user-2");
+      ChatSession stale =
+          ChatSession.builder()
+              .id("old")
+              .user1Id("user-2")
+              .user2Id("user-9")
+              .status(ChatSession.SessionStatus.ACTIVE)
+              .build();
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(caller));
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
+          .thenReturn(List.of(caller, other));
+      stubClaim(List.of("user-1", "user-2"));
+      when(chatSessionRepository.findActiveByUserIds(any())).thenReturn(List.of(stale));
+
+      Optional<User> result = matchmakingService.findRandomMatch("user-1");
+
+      assertEquals("user-2", result.orElseThrow().getId());
+      assertEquals(ChatSession.SessionStatus.ENDED, stale.getStatus());
+      assertNotNull(stale.getEndedAt());
+      InOrder order = inOrder(userRepository, chatSessionRepository);
+      order.verify(userRepository).findAllByIdInOrderById(List.of("user-1", "user-2"));
+      order.verify(chatSessionRepository).findActiveByUserIds(any());
+      order.verify(chatSessionRepository, times(2)).save(any(ChatSession.class));
+      order.verify(userRepository).updateStatusByIdIn(any(), eq(UserStatus.IN_CHAT), any());
+    }
+
+    @Test
+    @DisplayName("should lock rows in id order whatever the caller is")
+    void shouldLockInIdOrder() {
+      User caller = searching("zzz");
+      User other = searching("aaa");
+      when(userRepository.findById("zzz")).thenReturn(Optional.of(caller));
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
+          .thenReturn(List.of(caller, other));
+      stubClaim(List.of("zzz", "aaa"));
+      when(chatSessionRepository.findActiveByUserIds(any())).thenReturn(List.of());
+
+      matchmakingService.findRandomMatch("zzz");
+
+      // The repository query sorts by id; the service must pass both ids in one call.
+      verify(userRepository).findAllByIdInOrderById(argThat(ids -> ids.size() == 2));
+    }
+
+    @Test
+    @DisplayName("should not create a session when the caller was claimed by someone else")
+    void shouldAbortWhenCallerNoLongerSearching() {
+      User caller = searching("user-1");
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(caller));
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
+          .thenReturn(List.of(caller, searching("user-2")));
+      stubClaim(List.of("user-2"));
+
+      assertTrue(matchmakingService.findRandomMatch("user-1").isEmpty());
+      verify(chatSessionRepository, never()).save(any());
+      verify(userRepository, never()).updateStatusByIdIn(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("should try another candidate when the first one was taken meanwhile")
+    void shouldRetryWithAnotherCandidate() {
+      User caller = searching("user-1");
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(caller));
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
+          .thenReturn(List.of(caller, searching("user-2"), searching("user-3")));
+      when(userRepository.findAllByIdInOrderById(any())).thenReturn(List.of());
+      // Whoever is picked first is gone; the second pick is claimable.
+      when(userRepository.findIdsByIdInAndStatusAndBannedFalse(any(), eq(UserStatus.SEARCHING)))
+          .thenReturn(List.of("user-1"))
+          .thenAnswer(
+              inv ->
+                  new java.util.ArrayList<>(((java.util.Collection<String>) inv.getArgument(0))));
+      when(chatSessionRepository.findActiveByUserIds(any())).thenReturn(List.of());
 
       Optional<User> result = matchmakingService.findRandomMatch("user-1");
 
       assertTrue(result.isPresent());
-      assertEquals("user-2", result.get().getId());
-
-      // Verify session was created
       verify(chatSessionRepository).save(any(ChatSession.class));
+      verify(userRepository, times(2)).findAllByIdInOrderById(any());
+    }
 
-      // Verify both users status changed to IN_CHAT
-      // The current user is saved when status is updated, and the matched user is saved once
-      verify(userRepository, atLeastOnce()).save(any(User.class));
+    @Test
+    @DisplayName("should never match a very low reputation user, even through the fallback pick")
+    void shouldExcludeLowReputationFromFallback() {
+      User caller = searching("user-1");
+      User toxic = searching("user-2");
+      toxic.setReputationScore(-50);
+      when(userRepository.findById("user-1")).thenReturn(Optional.of(caller));
+      when(userRepository.findByStatusAndBannedFalse(UserStatus.SEARCHING))
+          .thenReturn(List.of(caller, toxic));
+
+      assertTrue(matchmakingService.findRandomMatch("user-1").isEmpty());
+      verify(userRepository, never()).findAllByIdInOrderById(any());
     }
   }
 

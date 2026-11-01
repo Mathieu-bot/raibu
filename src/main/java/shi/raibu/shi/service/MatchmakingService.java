@@ -25,6 +25,14 @@ public class MatchmakingService {
   private final ChatSessionRepository chatSessionRepository;
   private final Random random = new Random();
 
+  private static final int MIN_MATCHABLE_REPUTATION = -49;
+  private static final int MAX_CLAIM_ATTEMPTS = 5;
+
+  /**
+   * Finds a partner for the user and claims both of them atomically: the two rows are locked in id
+   * order, their status and ban are re-checked after locking, stale ACTIVE sessions are closed and
+   * both users become IN_CHAT in the same transaction. Returns empty when nobody can be claimed.
+   */
   @Transactional
   public Optional<User> findRandomMatch(String userId) {
     Optional<User> currentUserOpt = userRepository.findById(userId);
@@ -38,19 +46,75 @@ public class MatchmakingService {
       log.info("User {} is banned and cannot be matched", userId);
       return Optional.empty();
     }
-    String countryCode = currentUser.getCountryCode();
-
-    String currentMode = normalizeMode(currentUser.getSearchMode());
-
-    List<User> searchingUsers =
-        userRepository.findByStatusAndBannedFalse(User.UserStatus.SEARCHING).stream()
-            .filter(user -> !user.getId().equals(userId))
-            .toList();
-
-    if (searchingUsers.isEmpty()) {
+    if (currentUser.getStatus() != User.UserStatus.SEARCHING) {
+      log.info("User {} is not searching (status={}), no match", userId, currentUser.getStatus());
       return Optional.empty();
     }
 
+    List<User> candidates =
+        new ArrayList<>(
+            userRepository.findByStatusAndBannedFalse(User.UserStatus.SEARCHING).stream()
+                .filter(user -> !user.getId().equals(userId))
+                .filter(user -> user.getReputationScore() >= MIN_MATCHABLE_REPUTATION)
+                .toList());
+
+    for (int attempt = 0; attempt < MAX_CLAIM_ATTEMPTS && !candidates.isEmpty(); attempt++) {
+      User match = pickCandidate(currentUser, candidates);
+      switch (claim(userId, match.getId())) {
+        case CLAIMED:
+          log.info("Match created between {} and {}", userId, match.getId());
+          return Optional.of(match);
+        case CALLER_UNAVAILABLE:
+          return Optional.empty();
+        case CANDIDATE_UNAVAILABLE:
+          candidates.removeIf(c -> c.getId().equals(match.getId()));
+          break;
+      }
+    }
+    return Optional.empty();
+  }
+
+  private enum ClaimResult {
+    CLAIMED,
+    CALLER_UNAVAILABLE,
+    CANDIDATE_UNAVAILABLE
+  }
+
+  private ClaimResult claim(String userId, String candidateId) {
+    // Ordered pessimistic locks: concurrent claims on the same pair serialize instead of
+    // deadlocking.
+    userRepository.findAllByIdInOrderById(List.of(userId, candidateId));
+    List<String> claimable =
+        userRepository.findIdsByIdInAndStatusAndBannedFalse(
+            List.of(userId, candidateId), User.UserStatus.SEARCHING);
+    if (!claimable.contains(userId)) {
+      return ClaimResult.CALLER_UNAVAILABLE;
+    }
+    if (!claimable.contains(candidateId)) {
+      return ClaimResult.CANDIDATE_UNAVAILABLE;
+    }
+
+    closeActiveSessions(List.of(userId, candidateId));
+    createChatSession(userId, candidateId);
+    userRepository.updateStatusByIdIn(
+        List.of(userId, candidateId), User.UserStatus.IN_CHAT, Instant.now());
+    return ClaimResult.CLAIMED;
+  }
+
+  private void closeActiveSessions(List<String> userIds) {
+    Instant now = Instant.now();
+    for (ChatSession stale : chatSessionRepository.findActiveByUserIds(userIds)) {
+      stale.setStatus(ChatSession.SessionStatus.ENDED);
+      stale.setEndedAt(now);
+      chatSessionRepository.save(stale);
+      log.warn("Closed stale active session {} before creating a new match", stale.getId());
+    }
+  }
+
+  private User pickCandidate(User currentUser, List<User> searchingUsers) {
+    String userId = currentUser.getId();
+    String countryCode = currentUser.getCountryCode();
+    String currentMode = normalizeMode(currentUser.getSearchMode());
     boolean preferSameCountry =
         currentUser.getPreferSameCountry() == null || currentUser.getPreferSameCountry();
     Set<String> currentLanguages = parseCsvToSet(currentUser.getPreferredLanguages());
@@ -62,11 +126,6 @@ public class MatchmakingService {
     List<User> bestCandidates = new ArrayList<>();
 
     for (User candidate : searchingUsers) {
-      // Exclude candidates with very low reputation
-      if (candidate.getReputationScore() <= -50) {
-        continue;
-      }
-
       int score = 0;
 
       String candidateMode = normalizeMode(candidate.getSearchMode());
@@ -106,8 +165,7 @@ public class MatchmakingService {
         score += 2;
       }
 
-      // Reputation influence: users with higher reputationScore are preferred,
-      // while users with strongly negative reputation are penalized.
+      // Reputation influence: users with higher reputationScore are preferred.
       score += candidate.getReputationScore() / 10;
 
       if (score > maxScore) {
@@ -119,23 +177,15 @@ public class MatchmakingService {
       }
     }
 
-    User match;
     if (maxScore > 0 && !bestCandidates.isEmpty()) {
-      match = bestCandidates.get(random.nextInt(bestCandidates.size()));
+      User match = bestCandidates.get(random.nextInt(bestCandidates.size()));
       log.info(
           "Matching user {} with {} using preferences (score={})", userId, match.getId(), maxScore);
-    } else {
-      match = searchingUsers.get(random.nextInt(searchingUsers.size()));
-      log.info("Matching user {} with {} without preferences", userId, match.getId());
+      return match;
     }
-
-    createChatSession(userId, match.getId());
-
-    updateUserStatus(userId, User.UserStatus.IN_CHAT);
-    updateUserStatus(match.getId(), User.UserStatus.IN_CHAT);
-
-    log.info("Match created between {} and {}", userId, match.getId());
-    return Optional.of(match);
+    User match = searchingUsers.get(random.nextInt(searchingUsers.size()));
+    log.info("Matching user {} with {} without preferences", userId, match.getId());
+    return match;
   }
 
   @Transactional
