@@ -3,6 +3,7 @@ package shi.raibu.shi.websocket;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -19,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import shi.raibu.shi.model.ChatSession;
+import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatMessageRepository;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
@@ -43,6 +46,32 @@ class SignalingControllerTest {
 
   private SignalMessage offerTo(String to) {
     return SignalMessage.builder().type(SignalMessage.SignalType.OFFER).to(to).data("sdp").build();
+  }
+
+  @Test
+  void nextEndsChatThenRequeuesUserWithTheirSearchMode() {
+    User user = new User();
+    user.setId("alice");
+    user.setSearchMode("FUN");
+    when(userRepository.findById("alice")).thenReturn(Optional.of(user));
+    when(matchmakingService.findRandomMatch("alice")).thenReturn(Optional.empty());
+
+    controller.nextUser(alice);
+
+    InOrder order = inOrder(matchmakingService);
+    order.verify(matchmakingService).endChat("alice");
+    order.verify(matchmakingService).startSearching("alice", "FUN");
+    order.verify(matchmakingService).findRandomMatch("alice");
+  }
+
+  @Test
+  void nextFromBannedUserDoesNothingButError() {
+    when(matchmakingService.isUserBanned("alice")).thenReturn(true);
+
+    controller.nextUser(alice);
+
+    verify(matchmakingService, never()).endChat(any());
+    verify(matchmakingService, never()).startSearching(any(), any());
   }
 
   @Test
