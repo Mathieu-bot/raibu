@@ -30,6 +30,9 @@ import shi.raibu.shi.websocket.model.SignalMessage;
 @AllArgsConstructor
 @Slf4j
 public class SignalingController {
+  /** Maximum length of a chat message, after trimming. */
+  static final int MAX_CHAT_LENGTH = 2000;
+
   private final SimpMessagingTemplate messagingTemplate;
   private final MatchmakingService matchmakingService;
   private final ChatSessionRepository chatSessionRepository;
@@ -215,6 +218,11 @@ public class SignalingController {
     content = content.trim();
     if (content.isEmpty()) {
       log.warn("Ignoring blank chat message from {}", senderId);
+      return;
+    }
+    if (content.length() > MAX_CHAT_LENGTH) {
+      log.info("Rejecting chat message from {}: {} characters", senderId, content.length());
+      sendErrorToUser(senderId, "MESSAGE_TOO_LONG");
       return;
     }
 
