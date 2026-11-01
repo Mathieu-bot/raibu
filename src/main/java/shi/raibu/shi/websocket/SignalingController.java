@@ -2,7 +2,9 @@ package shi.raibu.shi.websocket;
 
 import java.security.Principal;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Optional;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -16,6 +18,7 @@ import shi.raibu.shi.model.DirectMessage;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatMessageRepository;
 import shi.raibu.shi.repository.ChatSessionRepository;
+import shi.raibu.shi.repository.FriendshipRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.DirectMessageService;
 import shi.raibu.shi.service.IcebreakerService;
@@ -40,6 +43,7 @@ public class SignalingController {
   private final UserRepository userRepository;
   private final IcebreakerService icebreakerService;
   private final DirectMessageService directMessageService;
+  private final FriendshipRepository friendshipRepository;
 
   private void sendErrorToUser(String userId, String code) {
     SignalMessage error =
@@ -50,6 +54,29 @@ public class SignalingController {
             .data(code)
             .build();
     messagingTemplate.convertAndSendToUser(userId, "/queue/match", error);
+  }
+
+  /** Signal types that two friends may exchange to set up a call outside any random chat. */
+  private static final Set<SignalMessage.SignalType> FRIEND_CALL_SIGNALS =
+      EnumSet.of(
+          SignalMessage.SignalType.CALL_INVITE,
+          SignalMessage.SignalType.CALL_ACCEPT,
+          SignalMessage.SignalType.CALL_REJECT,
+          SignalMessage.SignalType.CALL_END,
+          SignalMessage.SignalType.OFFER,
+          SignalMessage.SignalType.ANSWER,
+          SignalMessage.SignalType.ICE_CANDIDATE);
+
+  private boolean isFriendCallSignal(String senderId, String recipientId, SignalMessage message) {
+    if (message.getType() == null || !FRIEND_CALL_SIGNALS.contains(message.getType())) {
+      return false;
+    }
+    if (senderId.equals(recipientId)) {
+      return false;
+    }
+    String user1 = senderId.compareTo(recipientId) < 0 ? senderId : recipientId;
+    String user2 = senderId.compareTo(recipientId) < 0 ? recipientId : senderId;
+    return friendshipRepository.findByUserId1AndUserId2(user1, user2).isPresent();
   }
 
   private Optional<ChatSession> findActiveSession(String userA, String userB) {
@@ -167,7 +194,8 @@ public class SignalingController {
       return;
     }
 
-    if (findActiveSession(senderId, recipientId).isEmpty()) {
+    if (findActiveSession(senderId, recipientId).isEmpty()
+        && !isFriendCallSignal(senderId, recipientId, message)) {
       log.info("Dropping signal from {} to {}: no active session", senderId, recipientId);
       sendErrorToUser(senderId, "NO_ACTIVE_SESSION");
       return;
