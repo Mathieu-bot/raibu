@@ -49,6 +49,15 @@ public class SignalingController {
     messagingTemplate.convertAndSendToUser(userId, "/queue/match", error);
   }
 
+  private Optional<ChatSession> findActiveSession(String userA, String userB) {
+    return chatSessionRepository
+        .findByUser1IdAndUser2IdAndStatus(userA, userB, ChatSession.SessionStatus.ACTIVE)
+        .or(
+            () ->
+                chatSessionRepository.findByUser1IdAndUser2IdAndStatus(
+                    userB, userA, ChatSession.SessionStatus.ACTIVE));
+  }
+
   /** Search for a random match */
   @MessageMapping("/search")
   public void searchForMatch(
@@ -155,6 +164,12 @@ public class SignalingController {
       return;
     }
 
+    if (findActiveSession(senderId, recipientId).isEmpty()) {
+      log.info("Dropping signal from {} to {}: no active session", senderId, recipientId);
+      sendErrorToUser(senderId, "NO_ACTIVE_SESSION");
+      return;
+    }
+
     message.setFrom(senderId);
     log.info("Signal {} from {} to {}", message.getType(), senderId, recipientId);
 
@@ -182,14 +197,7 @@ public class SignalingController {
       return;
     }
 
-    Optional<ChatSession> sessionOpt =
-        chatSessionRepository
-            .findByUser1IdAndUser2IdAndStatus(
-                senderId, recipientId, ChatSession.SessionStatus.ACTIVE)
-            .or(
-                () ->
-                    chatSessionRepository.findByUser1IdAndUser2IdAndStatus(
-                        recipientId, senderId, ChatSession.SessionStatus.ACTIVE));
+    Optional<ChatSession> sessionOpt = findActiveSession(senderId, recipientId);
 
     if (sessionOpt.isEmpty()) {
       log.info("No active session between {} and {} for chat", senderId, recipientId);
