@@ -1,26 +1,22 @@
 name: CI
 
+# Runs on every feature branch push. preprod and prod run the same jobs through cd.yml (workflow_call),
+# so they are excluded from the push trigger to avoid running the tests twice.
 on:
   push:
-    branches:
-      - '*'
+    branches-ignore:
+      - preprod
+      - prod
   pull_request:
     branches:
-      - '*'
+      - prod
   workflow_dispatch:
-
   workflow_call:
-
-
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
-    env:
-      AWS_REGION: eu-west-3
-      
 
     steps:
       - uses: actions/checkout@v4.1.6
@@ -30,10 +26,7 @@ jobs:
           java-version: '21'
           distribution: 'corretto'
       - run: chmod +x gradlew
-      - run: chmod +x .shell/publish_gen_to_maven_local.sh
       - run: ./gradlew test
-
-      
 
   format:
     runs-on: ubuntu-latest
