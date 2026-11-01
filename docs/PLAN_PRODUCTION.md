@@ -1,5 +1,9 @@
 # Production readiness plan — Raibu API
 
+> **Status (2026-11-01): the plan was executed.** Done: every finding F-01 to F-32 and streams S0 to S4 (PRs #24 to #75, listed in `docs/HANDOFF.md`).
+> Not done: Testcontainers startup test (S0-9), `?before=` pagination cursor, a live Render/Neon deployment (owner actions in `docs/DEPLOYMENT.md`),
+> the `preprod -> prod` promotion. The rest of this document is kept as history; where it disagrees with the code or `docs/API.md`, the code wins.
+
 Written 2026-11-01 from a full code review (4 passes). `file:line` references come from the reviews:
 **re-read the code before fixing, lines move.** Language rule: code, comments, commits, PRs and docs are in English.
 
