@@ -1,0 +1,75 @@
+name: Rollback
+
+# Redeploys a previously published image (tag = commit SHA, see cd.yml) to an environment.
+# Find the SHA in the Build and Deploy runs or on Docker Hub (tafitamathieu/raibu).
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to roll back
+        type: choice
+        options:
+          - preprod
+          - prod
+        required: true
+      sha:
+        description: Full commit SHA of the image to redeploy
+        type: string
+        required: true
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: tafitamathieu/raibu
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      # Render-specific step: isolated so the hosting provider can be replaced.
+      - name: Redeploy the given image on Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL is not set for the ${{ inputs.environment }} environment."
+            exit 1
+          fi
+          if ! printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::sha must be a full 40 character lowercase commit SHA."
+            exit 1
+          fi
+          IMG_URL="docker.io%2F${IMAGE//\//%2F}%3A${SHA}"
+          curl --fail -sS -X POST "${RENDER_DEPLOY_HOOK_URL}&imgURL=${IMG_URL}"
+
+  smoke-test:
+    needs: rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Wait for /ping to answer 200
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::notice::APP_URL is not set for this environment, skipping the smoke test."
+            exit 0
+          fi
+          deadline=$((SECONDS + 300))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL%/}/ping" || true)
+            echo "GET ${APP_URL%/}/ping -> ${code}"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::${APP_URL%/}/ping did not return 200 within 5 minutes."
+          exit 1
