@@ -74,10 +74,18 @@ public class AdminModerationController {
   @RequireRole(Role.ADMIN)
   public ResponseEntity<Void> updateReportStatus(
       @PathVariable String reportId, @RequestBody UpdateReportStatusRequest request) {
+    if (request == null || request.status() == null) {
+      return ResponseEntity.badRequest().build();
+    }
     return reportRepository
         .findById(reportId)
         .map(
             report -> {
+              if (report.getStatus() == request.status()) {
+                // Re-sending the same status must not repeat strikes or notifications.
+                return ResponseEntity.ok().<Void>build();
+              }
+
               report.setStatus(request.status());
               reportRepository.save(report);
 
