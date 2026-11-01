@@ -78,7 +78,10 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
     user.setDisplayName(name);
     user.setAvatarUrl(picture);
     user.setLastActiveAt(Instant.now());
-    user.setCountryCode(countryCode);
+    // The country may have been chosen by the user: only fill it when it is still unset
+    if (user.getCountryCode() == null || user.getCountryCode().isBlank()) {
+      user.setCountryCode(countryCode);
+    }
 
     userRepository.save(user);
 

@@ -86,6 +86,30 @@ class CustomOidcUserServiceTest {
   }
 
   @Test
+  void keepsTheCountryChosenByTheUser() {
+    when(delegate.loadUser(request)).thenReturn(googleUser("a@example.com", true, "fr-FR"));
+    User existing = User.builder().id("app-uuid").countryCode("MG").build();
+    when(userRepository.findByProviderAndProviderId("google", "google-sub-1"))
+        .thenReturn(Optional.of(existing));
+
+    service.loadUser(request);
+
+    assertEquals("MG", existing.getCountryCode());
+  }
+
+  @Test
+  void fillsTheCountryFromTheLocaleWhenItIsUnset() {
+    when(delegate.loadUser(request)).thenReturn(googleUser("a@example.com", true, "fr-FR"));
+    User existing = User.builder().id("app-uuid").build();
+    when(userRepository.findByProviderAndProviderId("google", "google-sub-1"))
+        .thenReturn(Optional.of(existing));
+
+    service.loadUser(request);
+
+    assertEquals("FR", existing.getCountryCode());
+  }
+
+  @Test
   void acceptsVerifiedEmailAndExposesTheAppUserId() {
     when(delegate.loadUser(request)).thenReturn(googleUser("a@example.com", true, "fr-FR"));
     when(userRepository.findByProviderAndProviderId("google", "google-sub-1"))
