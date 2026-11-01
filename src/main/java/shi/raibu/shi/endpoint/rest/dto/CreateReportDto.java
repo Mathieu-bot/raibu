@@ -7,9 +7,6 @@ import shi.raibu.shi.model.Report;
 
 public class CreateReportDto {
 
-  @NotBlank(message = "Reporter ID is required")
-  private String reporterId;
-
   @NotBlank(message = "Reported user ID is required")
   private String reportedUserId;
 
@@ -20,14 +17,6 @@ public class CreateReportDto {
 
   @Size(max = 1000, message = "Description must be less than 1000 characters")
   private String description;
-
-  public String getReporterId() {
-    return reporterId;
-  }
-
-  public void setReporterId(String reporterId) {
-    this.reporterId = reporterId;
-  }
 
   public String getReportedUserId() {
     return reportedUserId;
