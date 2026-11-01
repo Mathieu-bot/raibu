@@ -41,3 +41,12 @@ out/
 
 ### Mac OS ###
 .DS_Store
+
+### Secrets and local tooling ###
+.env
+.env.*
+!.env.example
+infrastructure/terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.zip
