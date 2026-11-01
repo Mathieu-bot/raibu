@@ -3,43 +3,55 @@ package shi.raibu.shi.endpoint.rest.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import shi.raibu.shi.endpoint.rest.dto.FlaggedUserDto;
+import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.service.MatchmakingService;
 import shi.raibu.shi.service.NotificationService;
 import shi.raibu.shi.service.ReputationService;
 
 class AdminModerationControllerTest {
 
   private ReportRepository reportRepository;
+  private UserRepository userRepository;
+  private MatchmakingService matchmakingService;
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
     reportRepository = mock(ReportRepository.class);
+    userRepository = mock(UserRepository.class);
+    matchmakingService = mock(MatchmakingService.class);
     mockMvc =
         MockMvcBuilders.standaloneSetup(
                 new AdminModerationController(
                     reportRepository,
-                    mock(UserRepository.class),
+                    userRepository,
                     mock(ChatSessionRepository.class),
                     mock(NotificationService.class),
-                    mock(ReputationService.class)))
+                    mock(ReputationService.class),
+                    matchmakingService))
             .build();
   }
 
@@ -72,5 +84,34 @@ class AdminModerationControllerTest {
         .andExpect(status().isOk());
 
     verify(reportRepository).findFlaggedUsers(any(Instant.class), eq(1L));
+  }
+
+  private void ban(boolean alreadyBanned, boolean banned) throws Exception {
+    when(userRepository.findById("u1"))
+        .thenReturn(Optional.of(User.builder().id("u1").banned(alreadyBanned).build()));
+    mockMvc
+        .perform(
+            put("/admin/users/u1/ban")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"banned\":" + banned + "}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  void banEndsTheActiveChatOnce() throws Exception {
+    ban(false, true);
+    verify(matchmakingService, times(1)).endChat("u1");
+  }
+
+  @Test
+  void reBanDoesNotEndChatAgain() throws Exception {
+    ban(true, true);
+    verify(matchmakingService, never()).endChat("u1");
+  }
+
+  @Test
+  void unbanDoesNotEndChat() throws Exception {
+    ban(true, false);
+    verify(matchmakingService, never()).endChat("u1");
   }
 }

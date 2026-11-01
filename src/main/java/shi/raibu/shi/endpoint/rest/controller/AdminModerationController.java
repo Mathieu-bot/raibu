@@ -24,6 +24,7 @@ import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.security.RequireRole;
+import shi.raibu.shi.service.MatchmakingService;
 import shi.raibu.shi.service.NotificationService;
 import shi.raibu.shi.service.ReputationService;
 
@@ -41,6 +42,7 @@ public class AdminModerationController {
   private final ChatSessionRepository chatSessionRepository;
   private final NotificationService notificationService;
   private final ReputationService reputationService;
+  private final MatchmakingService matchmakingService;
 
   @GetMapping("/reports")
   @RequireRole(Role.ADMIN)
@@ -119,6 +121,7 @@ public class AdminModerationController {
 
               if (!wasBanned && nowBanned) {
                 reputationService.registerBan(userId);
+                matchmakingService.endChat(userId);
                 notificationService.notifyUser(
                     userId, NotificationType.USER_BANNED, "Your account has been banned.", null);
               } else if (wasBanned && !nowBanned) {
