@@ -1,123 +1,106 @@
-# Raibu - API
+# Raibu API
 
-Spring Boot api for Raibu (matchmaking + WebRTC signaling + chat + moderation + notifications).
+Backend of Raibu, an Omegle-like random chat: Google sign-in, matchmaking, WebRTC signaling and text chat over STOMP/WebSocket,
+friends and direct messages, reports and moderation, reputation and notifications.
+
+Stack: Java 21, Spring Boot 3.2.2 (Web, Security with OAuth2 client, WebSocket/STOMP, Data JPA), PostgreSQL, Flyway, springdoc
+(Swagger UI, disabled in production). Package root: `src/main/java/shi/raibu/shi`.
+
+## Documentation
+
+| Document | Content |
+|---|---|
+| [`docs/API.md`](docs/API.md) | REST and WebSocket contract for the frontend (start here if you build the client) |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Components, matchmaking flow, locking, state machines, data model |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Roles, admins, moderation, bans, rate limits, CSRF |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Render, Neon and GitHub environments, environment variables, rollback, troubleshooting |
 
 ## Requirements
 
 - Java 21
-- Docker (optional, for PostgreSQL)
+- Docker (for the local PostgreSQL)
+- A Google OAuth client (Web application) for sign-in: see below
 
-## Quick start (local)
+## Run locally
 
-### 1) Start PostgreSQL
-
-From this folder:
+### 1. Start PostgreSQL
 
 ```bash
 docker compose up -d db
 ```
 
-This starts PostgreSQL on:
+PostgreSQL listens on `localhost:55432`, database `raibu`, user `raibu_admin`, password `raibu_password`.
 
-- Host: `localhost`
-- Port: `55432`
-- Database: `raibu`
-- User: `raibu_admin`
-- Password: `raibu_password`
+### 2. Create a Google OAuth client
 
-### 2) Configure environment variables
+Google Cloud Console, APIs & Services, Credentials, OAuth client ID, type Web application. Add the authorized redirect URI
+`http://localhost:8080/login/oauth2/code/google`. Copy the client id and secret.
 
-The backend reads configuration from environment variables (see `src/main/resources/application.yml` and `docker-compose.yml`).
+### 3. Configure environment variables
 
-Typical local setup:
+The app reads everything from the environment (`src/main/resources/application.yml`). You can put them in a git-ignored `.env`
+(see `.env.example`) and run `./run-local.sh`, or export them:
 
 ```bash
 export DATABASE_URL='jdbc:postgresql://localhost:55432/raibu'
 export DATABASE_USERNAME='raibu_admin'
 export DATABASE_PASSWORD='raibu_password'
-export PORT='8080'
-export ALLOWED_ORIGINS='http://localhost:5173,http://localhost:8080'
-
-# Google OAuth (required for authenticated endpoints)
 export GOOGLE_CLIENT_ID='...'
 export GOOGLE_CLIENT_SECRET='...'
+export FRONTEND_URL='http://localhost:5173'
+export ALLOWED_ORIGINS='http://localhost:5173,http://localhost:3000'
+export ADMIN_EMAILS='you@example.com'   # optional: makes this Google account an admin
 ```
 
-Important:
+Without `DATABASE_*` the defaults are `jdbc:postgresql://localhost:5432/raibu`, `postgres` / `postgres`, which do not match the
+compose database. The full variable list is in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#1-environment-variables).
 
-- If you do not set `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD`, the defaults from `application.yml` are used:
-  - `jdbc:postgresql://localhost:5432/raibu`
-  - user `postgres`
-  - password `postgres`
-- If you started the DB using `docker compose up -d db`, you MUST use the docker-compose credentials/port (`55432`, `raibu_admin`, `raibu_password`) via env vars as shown above.
-
-Notes:
-
-- If your Vite dev server uses another port (for example `5175`), add it to `ALLOWED_ORIGINS`.
-
-### 3) Run the backend
+### 4. Start the backend
 
 ```bash
 ./gradlew bootRun
 ```
 
-Backend will be available at:
+Flyway creates the schema on first start (`src/main/resources/db/migration`). Then:
 
-- REST: `http://localhost:8080`
-- WebSocket STOMP (SockJS): `http://localhost:8080/ws`
+- REST: `http://localhost:8080` (health: `curl http://localhost:8080/ping` returns `pong`)
+- WebSocket (STOMP over SockJS): `http://localhost:8080/ws`
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html` (needs a signed-in session; disabled with `SPRING_PROFILES_ACTIVE=prod`)
+- Sign in: open `http://localhost:8080/oauth2/authorization/google` in a browser
 
-## Quick start (Docker)
+### Docker
 
-Run PostgreSQL + backend together:
+`docker compose up --build` starts PostgreSQL and the backend container on port 8080. The `app` service in `docker-compose.yml` does not
+define `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`: add them to its `environment` section to sign in.
 
-```bash
-docker compose up --build
-```
-
-Exposed ports:
-
-- Backend: `http://localhost:8080`
-- Postgres: `localhost:55432`
-
-## Healthcheck
+## Build, test, format
 
 ```bash
-curl http://localhost:8080/ping
+./gradlew test        # unit tests (Mockito, no database needed)
+./gradlew bootJar     # build/libs/app.jar
+./format.sh           # google-java-format, required by CI
 ```
 
-Expected output:
+CI (`.github/workflows/ci.yml`) runs the tests and checks that `./format.sh` leaves no diff. Every push to `preprod` or `prod` builds the
+Docker image `tafitamathieu/raibu` and deploys to Render, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-```text
-pong
+## Project layout
+
+```
+src/main/java/shi/raibu/shi
+  endpoint/      REST controllers, DTOs, rate limiting and request logging
+  websocket/     STOMP controller, config, presence listener, message models
+  service/       matchmaking, feedback, friendship, direct messages, notifications, reputation
+  security/      Spring Security config, Google user mapping, roles
+  model/ repository/  JPA entities and Spring Data repositories
+  exception/     global REST exception handler
+src/main/resources/db/migration   Flyway SQL migrations (never edit an applied one, add a new file)
 ```
 
 ## Troubleshooting
 
-### `FATAL: password authentication failed for user "postgres"`
-
-This means the backend is trying to connect with the default DB user (`postgres`). Fix with one of these:
-
-- Start the provided Docker DB and export the env vars:
-
-```bash
-docker compose up -d db
-export DATABASE_URL='jdbc:postgresql://localhost:55432/raibu'
-export DATABASE_USERNAME='raibu_admin'
-export DATABASE_PASSWORD='raibu_password'
-./gradlew bootRun
-```
-
-- Or run a local Postgres that matches the defaults (`localhost:5432`, `postgres`/`postgres`).
-
-## Main features
-
-- Google OAuth login (Spring Security OAuth2 client)
-- Matchmaking over WebSocket/STOMP:
-  - Send: `/app/search`, `/app/next`, `/app/stop`, `/app/signal`, `/app/chat`, `/app/dm`
-  - Subscribe: `/user/queue/match`, `/user/queue/signal`, `/user/queue/chat`, `/user/queue/dm`, `/user/queue/notifications`
-- Persistence (PostgreSQL + Flyway migrations)
-
-## Docs
-
-- Backend API documentation is available in:
-  - `docs/backend-api.md`
+- `password authentication failed for user "postgres"`: you are using the default credentials. Export the `DATABASE_*` variables of
+  step 3 (the compose database is on port `55432`).
+- `redirect_uri_mismatch`: the redirect URI is not registered in the Google client, see step 2.
+- Browser requests fail with CORS errors: add the frontend origin to `ALLOWED_ORIGINS`.
+- More cases (Render, Neon, Flyway): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#9-troubleshooting).
