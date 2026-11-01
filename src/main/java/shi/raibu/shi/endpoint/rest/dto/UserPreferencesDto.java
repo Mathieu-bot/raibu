@@ -1,17 +1,21 @@
 package shi.raibu.shi.endpoint.rest.dto;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public class UserPreferencesDto {
 
-  @Size(max = 2, message = "Country code must be 2 characters")
+  @Pattern(regexp = "^[A-Za-z]{2}$", message = "Country code must be 2 letters")
   private String countryCode;
 
-  private List<@Size(max = 50, message = "Language code too long") String> preferredLanguages;
+  @Size(max = 10, message = "At most 10 languages")
+  private List<@Size(max = 15, message = "Language code too long") String> preferredLanguages;
 
+  @Size(max = 10, message = "At most 10 interests")
   private List<@Size(max = 50, message = "Interest too long") String> interests;
 
+  @Size(max = 10, message = "At most 10 gender preferences")
   private List<@Size(max = 20, message = "Gender preference too long") String> preferredGenders;
 
   private Boolean preferSameCountry;

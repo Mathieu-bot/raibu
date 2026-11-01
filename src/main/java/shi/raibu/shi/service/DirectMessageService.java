@@ -13,6 +13,8 @@ import shi.raibu.shi.repository.FriendshipRepository;
 @AllArgsConstructor
 public class DirectMessageService {
 
+  public static final int MAX_CONTENT_LENGTH = 2000;
+
   private final DirectMessageRepository directMessageRepository;
   private final FriendshipRepository friendshipRepository;
   private final NotificationService notificationService;
@@ -33,6 +35,11 @@ public class DirectMessageService {
     String trimmed = content.trim();
     if (trimmed.isEmpty()) {
       throw new IllegalArgumentException("content cannot be blank");
+    }
+
+    if (trimmed.length() > MAX_CONTENT_LENGTH) {
+      throw new IllegalArgumentException(
+          "content cannot exceed " + MAX_CONTENT_LENGTH + " characters");
     }
 
     DirectMessage message =
