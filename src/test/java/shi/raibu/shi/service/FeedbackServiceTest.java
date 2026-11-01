@@ -7,13 +7,13 @@ import static org.mockito.Mockito.*;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.SessionFeedback;
+import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.SessionFeedbackRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -22,223 +22,121 @@ class FeedbackServiceTest {
   @Mock private SessionFeedbackRepository sessionFeedbackRepository;
   @Mock private ReputationService reputationService;
   @Mock private FriendshipService friendshipService;
+  @Mock private ChatSessionRepository chatSessionRepository;
 
   private FeedbackService feedbackService;
 
   @BeforeEach
   void setUp() {
     feedbackService =
-        new FeedbackService(sessionFeedbackRepository, reputationService, friendshipService);
+        new FeedbackService(
+            sessionFeedbackRepository, reputationService, friendshipService, chatSessionRepository);
   }
 
-  @Nested
-  @DisplayName("submitFeedback()")
-  class SubmitFeedbackTests {
+  private ChatSession session(ChatSession.SessionStatus status) {
+    return ChatSession.builder()
+        .id("session-1")
+        .user1Id("user-1")
+        .user2Id("user-2")
+        .status(status)
+        .build();
+  }
 
-    @Test
-    @DisplayName("should return false when feedback already exists")
-    void shouldReturnFalseWhenFeedbackExists() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
+  private void lockReturns(ChatSession s) {
+    when(chatSessionRepository.findByIdForUpdate("session-1")).thenReturn(Optional.of(s));
+  }
 
-      SessionFeedback existingFeedback =
-          SessionFeedback.builder()
-              .id("feedback-1")
-              .sessionId("session-1")
-              .fromUserId("user-1")
-              .toUserId("user-2")
-              .liked(true)
-              .build();
+  private void insertReturns(int rows) {
+    when(sessionFeedbackRepository.insertIfAbsent(
+            any(), eq("session-1"), anyString(), anyString(), anyBoolean(), any()))
+        .thenReturn(rows);
+  }
 
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.of(existingFeedback));
+  private SessionFeedback reverse(boolean liked) {
+    return SessionFeedback.builder()
+        .sessionId("session-1")
+        .fromUserId("user-2")
+        .toUserId("user-1")
+        .liked(liked)
+        .build();
+  }
 
-      boolean result = feedbackService.submitFeedback(session, "user-1", true);
+  @Test
+  @DisplayName("should reject feedback on a session that is still active")
+  void shouldRejectActiveSession() {
+    ChatSession active = session(ChatSession.SessionStatus.ACTIVE);
+    lockReturns(active);
 
-      assertFalse(result);
-      verify(sessionFeedbackRepository).findBySessionIdAndFromUserId("session-1", "user-1");
-      verify(sessionFeedbackRepository, never()).save(any(SessionFeedback.class));
-      verifyNoInteractions(reputationService, friendshipService);
-    }
+    assertThrows(
+        IllegalStateException.class, () -> feedbackService.submitFeedback(active, "user-1", true));
+    verifyNoInteractions(reputationService, friendshipService, sessionFeedbackRepository);
+  }
 
-    @Test
-    @DisplayName("should create feedback and apply reputation for like")
-    void shouldCreateFeedbackAndApplyReputationForLike() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
+  @Test
+  @DisplayName("should return false on duplicate feedback without touching reputation")
+  void shouldReturnFalseOnDuplicate() {
+    ChatSession ended = session(ChatSession.SessionStatus.ENDED);
+    lockReturns(ended);
+    insertReturns(0);
 
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
+    assertFalse(feedbackService.submitFeedback(ended, "user-1", true));
+    verifyNoInteractions(reputationService, friendshipService);
+  }
 
-      boolean result = feedbackService.submitFeedback(session, "user-1", true);
+  @Test
+  @DisplayName("should store feedback for the other user and apply reputation")
+  void shouldStoreFeedbackAndApplyReputation() {
+    ChatSession ended = session(ChatSession.SessionStatus.ENDED);
+    lockReturns(ended);
+    insertReturns(1);
 
-      assertTrue(result);
-      verify(sessionFeedbackRepository)
-          .save(
-              argThat(
-                  feedback ->
-                      feedback.getSessionId().equals("session-1")
-                          && feedback.getFromUserId().equals("user-1")
-                          && feedback.getToUserId().equals("user-2")
-                          && feedback.isLiked()));
-      verify(reputationService).applyFeedback("user-2", true);
-    }
+    assertTrue(feedbackService.submitFeedback(ended, "user-2", false));
 
-    @Test
-    @DisplayName("should create feedback and apply reputation for dislike")
-    void shouldCreateFeedbackAndApplyReputationForDislike() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
+    verify(sessionFeedbackRepository)
+        .insertIfAbsent(any(), eq("session-1"), eq("user-2"), eq("user-1"), eq(false), any());
+    verify(reputationService).applyFeedback("user-1", false);
+    verifyNoInteractions(friendshipService);
+  }
 
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
+  @Test
+  @DisplayName("should create friendship when the reverse like is visible after our write")
+  void shouldCreateFriendshipOnMutualLike() {
+    ChatSession ended = session(ChatSession.SessionStatus.ENDED);
+    lockReturns(ended);
+    insertReturns(1);
+    when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
+        .thenReturn(Optional.of(reverse(true)));
 
-      boolean result = feedbackService.submitFeedback(session, "user-1", false);
+    feedbackService.submitFeedback(ended, "user-1", true);
 
-      assertTrue(result);
-      verify(sessionFeedbackRepository)
-          .save(
-              argThat(
-                  feedback ->
-                      feedback.getSessionId().equals("session-1")
-                          && feedback.getFromUserId().equals("user-1")
-                          && feedback.getToUserId().equals("user-2")
-                          && !feedback.isLiked()));
-      verify(reputationService).applyFeedback("user-2", false);
-    }
+    verify(friendshipService).createFriendshipIfAbsent("user-1", "user-2");
+  }
 
-    @Test
-    @DisplayName("should determine correct toUserId when fromUserId is user1")
-    void shouldDetermineToUserIdWhenFromUserIsUser1() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
+  @Test
+  @DisplayName("should not create friendship when the reverse feedback is a dislike")
+  void shouldNotCreateFriendshipWhenReverseDislike() {
+    ChatSession ended = session(ChatSession.SessionStatus.ENDED);
+    lockReturns(ended);
+    insertReturns(1);
+    when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
+        .thenReturn(Optional.of(reverse(false)));
 
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
+    feedbackService.submitFeedback(ended, "user-1", true);
 
-      feedbackService.submitFeedback(session, "user-1", true);
+    verifyNoInteractions(friendshipService);
+  }
 
-      verify(sessionFeedbackRepository)
-          .save(
-              argThat(
-                  feedback ->
-                      feedback.getFromUserId().equals("user-1")
-                          && feedback.getToUserId().equals("user-2")));
-    }
+  @Test
+  @DisplayName("should not create friendship when there is no reverse feedback")
+  void shouldNotCreateFriendshipWithoutReverse() {
+    ChatSession ended = session(ChatSession.SessionStatus.ENDED);
+    lockReturns(ended);
+    insertReturns(1);
+    when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
+        .thenReturn(Optional.empty());
 
-    @Test
-    @DisplayName("should determine correct toUserId when fromUserId is user2")
-    void shouldDetermineToUserIdWhenFromUserIsUser2() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
+    feedbackService.submitFeedback(ended, "user-1", true);
 
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
-
-      feedbackService.submitFeedback(session, "user-2", true);
-
-      verify(sessionFeedbackRepository)
-          .save(
-              argThat(
-                  feedback ->
-                      feedback.getFromUserId().equals("user-2")
-                          && feedback.getToUserId().equals("user-1")));
-    }
-
-    @Test
-    @DisplayName("should not create friendship when feedback is dislike")
-    void shouldNotCreateFriendshipWhenDislike() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
-
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
-
-      feedbackService.submitFeedback(session, "user-1", false);
-
-      verifyNoInteractions(friendshipService);
-    }
-
-    @Test
-    @DisplayName("should not create friendship when reverse feedback does not exist")
-    void shouldNotCreateFriendshipWhenReverseFeedbackDoesNotExist() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
-
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
-
-      feedbackService.submitFeedback(session, "user-1", true);
-
-      verifyNoInteractions(friendshipService);
-    }
-
-    @Test
-    @DisplayName("should create friendship when both users liked each other")
-    void shouldCreateFriendshipWhenMutualLike() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
-
-      SessionFeedback reverseFeedback =
-          SessionFeedback.builder()
-              .id("feedback-2")
-              .sessionId("session-1")
-              .fromUserId("user-2")
-              .toUserId("user-1")
-              .liked(true)
-              .build();
-
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
-          .thenReturn(Optional.of(reverseFeedback));
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
-
-      feedbackService.submitFeedback(session, "user-1", true);
-
-      verify(friendshipService).createFriendshipIfAbsent("user-1", "user-2");
-    }
-
-    @Test
-    @DisplayName("should not create friendship when reverse feedback is dislike")
-    void shouldNotCreateFriendshipWhenReverseFeedbackIsDislike() {
-      ChatSession session =
-          ChatSession.builder().id("session-1").user1Id("user-1").user2Id("user-2").build();
-
-      SessionFeedback reverseFeedback =
-          SessionFeedback.builder()
-              .id("feedback-2")
-              .sessionId("session-1")
-              .fromUserId("user-2")
-              .toUserId("user-1")
-              .liked(false)
-              .build();
-
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-1"))
-          .thenReturn(Optional.empty());
-      when(sessionFeedbackRepository.findBySessionIdAndFromUserId("session-1", "user-2"))
-          .thenReturn(Optional.of(reverseFeedback));
-      when(sessionFeedbackRepository.save(any(SessionFeedback.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
-
-      feedbackService.submitFeedback(session, "user-1", true);
-
-      verifyNoInteractions(friendshipService);
-    }
+    verifyNoInteractions(friendshipService);
   }
 }

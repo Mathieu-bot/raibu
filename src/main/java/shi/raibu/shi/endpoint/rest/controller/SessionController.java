@@ -79,6 +79,10 @@ public class SessionController {
       return ResponseEntity.status(403).build();
     }
 
+    if (session.getStatus() != ChatSession.SessionStatus.ENDED) {
+      return ResponseEntity.status(409).build();
+    }
+
     feedbackService.submitFeedback(session, userId, request.liked());
 
     return ResponseEntity.ok().build();
