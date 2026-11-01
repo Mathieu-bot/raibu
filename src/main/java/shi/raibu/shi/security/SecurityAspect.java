@@ -31,8 +31,8 @@ public class SecurityAspect {
     OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
     String email = oidcUser.getEmail();
 
-    // Find user by email
-    String userId = oidcUser.getSubject();
+    // getName() is the application user id (see AppOidcUser), not the Google subject
+    String userId = authentication.getName();
 
     if (!roleService.hasRole(userId, requireRole.value())) {
       log.warn(
