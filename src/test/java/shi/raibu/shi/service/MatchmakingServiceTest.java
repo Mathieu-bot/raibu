@@ -16,23 +16,27 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.model.User.UserStatus;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.websocket.model.SignalMessage;
 
 @ExtendWith(MockitoExtension.class)
 class MatchmakingServiceTest {
 
   @Mock private UserRepository userRepository;
   @Mock private ChatSessionRepository chatSessionRepository;
+  @Mock private SimpMessagingTemplate messagingTemplate;
 
   private MatchmakingService matchmakingService;
 
   @BeforeEach
   void setUp() {
-    matchmakingService = new MatchmakingService(userRepository, chatSessionRepository);
+    matchmakingService =
+        new MatchmakingService(userRepository, chatSessionRepository, messagingTemplate);
   }
 
   @Nested
@@ -283,30 +287,91 @@ class MatchmakingServiceTest {
   @DisplayName("endChat()")
   class EndChatTests {
 
+    private User user(String id, UserStatus status) {
+      return User.builder().id(id).username(id).status(status).build();
+    }
+
+    private ChatSession active() {
+      return ChatSession.builder()
+          .id("session-1")
+          .user1Id("user-1")
+          .user2Id("user-2")
+          .status(ChatSession.SessionStatus.ACTIVE)
+          .startedAt(Instant.now())
+          .build();
+    }
+
     @Test
-    @DisplayName("should end all active sessions for user")
-    void shouldEndAllActiveSessionsForUser() {
-      User user = User.builder().id("user-1").username("user1").status(UserStatus.IN_CHAT).build();
-
-      ChatSession activeSession =
-          ChatSession.builder()
-              .id("session-1")
-              .user1Id("user-1")
-              .user2Id("user-2")
-              .status(ChatSession.SessionStatus.ACTIVE)
-              .startedAt(Instant.now())
-              .build();
-
-      when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
-      when(chatSessionRepository.findByUser1IdOrUser2Id("user-1", "user-1"))
-          .thenReturn(List.of(activeSession));
-      when(userRepository.save(any(User.class))).thenReturn(user);
+    @DisplayName("should end the session, release both users and notify the peer")
+    void shouldEndSessionReleaseBothAndNotifyPeer() {
+      ChatSession session = active();
+      when(chatSessionRepository.findActiveByUserIds(List.of("user-1")))
+          .thenReturn(List.of(session));
+      when(userRepository.findAllByIdInOrderById(any()))
+          .thenReturn(
+              List.of(user("user-1", UserStatus.IN_CHAT), user("user-2", UserStatus.IN_CHAT)));
 
       matchmakingService.endChat("user-1");
 
-      verify(chatSessionRepository)
-          .save(argThat(s -> s.getStatus() == ChatSession.SessionStatus.ENDED));
-      verify(userRepository).save(argThat(savedUser -> savedUser.getStatus() == UserStatus.IDLE));
+      assertEquals(ChatSession.SessionStatus.ENDED, session.getStatus());
+      assertNotNull(session.getEndedAt());
+      verify(userRepository)
+          .updateStatusByIdIn(
+              argThat(ids -> ids.containsAll(List.of("user-1", "user-2")) && ids.size() == 2),
+              eq(UserStatus.IDLE),
+              any());
+      verify(messagingTemplate)
+          .convertAndSendToUser(
+              eq("user-2"),
+              eq("/queue/match"),
+              argThat(
+                  (SignalMessage m) ->
+                      m.getType() == SignalMessage.SignalType.PEER_DISCONNECTED
+                          && "user-1".equals(m.getData())));
+    }
+
+    @Test
+    @DisplayName("should not touch a peer that is already searching again")
+    void shouldNotReleasePeerThatMovedOn() {
+      when(chatSessionRepository.findActiveByUserIds(List.of("user-1")))
+          .thenReturn(List.of(active()));
+      when(userRepository.findAllByIdInOrderById(any()))
+          .thenReturn(
+              List.of(user("user-1", UserStatus.IN_CHAT), user("user-2", UserStatus.SEARCHING)));
+
+      matchmakingService.endChat("user-1");
+
+      verify(userRepository)
+          .updateStatusByIdIn(
+              argThat(ids -> List.copyOf(ids).equals(List.of("user-1"))),
+              eq(UserStatus.IDLE),
+              any());
+    }
+
+    @Test
+    @DisplayName("should keep an OFFLINE caller offline")
+    void shouldKeepOfflineCallerOffline() {
+      when(chatSessionRepository.findActiveByUserIds(List.of("user-1"))).thenReturn(List.of());
+      when(userRepository.findAllByIdInOrderById(any()))
+          .thenReturn(List.of(user("user-1", UserStatus.OFFLINE)));
+
+      matchmakingService.endChat("user-1");
+
+      verify(userRepository, never()).updateStatusByIdIn(any(), any(), any());
+      verifyNoInteractions(messagingTemplate);
+    }
+
+    @Test
+    @DisplayName("should release the caller when there is no active session")
+    void shouldReleaseCallerWithoutSession() {
+      when(chatSessionRepository.findActiveByUserIds(List.of("user-1"))).thenReturn(List.of());
+      when(userRepository.findAllByIdInOrderById(any()))
+          .thenReturn(List.of(user("user-1", UserStatus.SEARCHING)));
+
+      matchmakingService.endChat("user-1");
+
+      verify(userRepository).updateStatusByIdIn(any(), eq(UserStatus.IDLE), any());
+      verifyNoInteractions(messagingTemplate);
     }
   }
 

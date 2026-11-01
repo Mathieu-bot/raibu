@@ -4,18 +4,23 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.websocket.model.SignalMessage;
 
 @Service
 @AllArgsConstructor
@@ -23,6 +28,7 @@ import shi.raibu.shi.repository.UserRepository;
 public class MatchmakingService {
   private final UserRepository userRepository;
   private final ChatSessionRepository chatSessionRepository;
+  private final SimpMessagingTemplate messagingTemplate;
   private final Random random = new Random();
 
   private static final int MIN_MATCHABLE_REPUTATION = -49;
@@ -222,22 +228,77 @@ public class MatchmakingService {
     log.info("User {} stopped searching", userId);
   }
 
+  /**
+   * Ends the caller's active session(s): marks them ENDED, releases both users to IDLE and tells
+   * the peer through a PEER_DISCONNECTED message on /queue/match (sent after commit).
+   */
   @Transactional
   public void endChat(String userId) {
+    List<ChatSession> active = chatSessionRepository.findActiveByUserIds(List.of(userId));
 
-    List<ChatSession> sessions = chatSessionRepository.findByUser1IdOrUser2Id(userId, userId);
+    Set<String> peerIds = new LinkedHashSet<>();
+    for (ChatSession s : active) {
+      peerIds.add(userId.equals(s.getUser1Id()) ? s.getUser2Id() : s.getUser1Id());
+    }
+    peerIds.remove(userId);
 
-    sessions.stream()
-        .filter(s -> s.getStatus() == ChatSession.SessionStatus.ACTIVE)
-        .forEach(
-            s -> {
-              s.setStatus(ChatSession.SessionStatus.ENDED);
-              s.setEndedAt(Instant.now());
-              chatSessionRepository.save(s);
-            });
+    Set<String> allIds = new LinkedHashSet<>();
+    allIds.add(userId);
+    allIds.addAll(peerIds);
+    // Same ordered locking as the match claim, so concurrent end/claim never deadlock.
+    List<User> locked = userRepository.findAllByIdInOrderById(allIds);
 
-    updateUserStatus(userId, User.UserStatus.IDLE);
-    log.info("User {} ended chat", userId);
+    Instant now = Instant.now();
+    for (ChatSession s : active) {
+      s.setStatus(ChatSession.SessionStatus.ENDED);
+      s.setEndedAt(now);
+      chatSessionRepository.save(s);
+    }
+
+    List<String> toRelease = new ArrayList<>();
+    for (User user : locked) {
+      if (user.getStatus() == User.UserStatus.OFFLINE) {
+        continue;
+      }
+      // The caller always goes IDLE; a peer only if it is still in that chat (it may have
+      // already started searching again).
+      if (user.getId().equals(userId) || user.getStatus() == User.UserStatus.IN_CHAT) {
+        toRelease.add(user.getId());
+      }
+    }
+    if (!toRelease.isEmpty()) {
+      userRepository.updateStatusByIdIn(toRelease, User.UserStatus.IDLE, now);
+    }
+
+    for (String peerId : peerIds) {
+      notifyAfterCommit(peerId, userId);
+    }
+    log.info("User {} ended chat (peers released: {})", userId, peerIds);
+  }
+
+  private void notifyAfterCommit(String peerId, String endedBy) {
+    Runnable send =
+        () ->
+            messagingTemplate.convertAndSendToUser(
+                peerId,
+                "/queue/match",
+                SignalMessage.builder()
+                    .type(SignalMessage.SignalType.PEER_DISCONNECTED)
+                    .from("system")
+                    .to(peerId)
+                    .data(endedBy)
+                    .build());
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(
+          new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+              send.run();
+            }
+          });
+    } else {
+      send.run();
+    }
   }
 
   private void createChatSession(String user1Id, String user2Id) {
