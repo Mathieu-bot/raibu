@@ -1,22 +1,40 @@
 package shi.raibu.shi.security;
 
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Set;
-import lombok.AllArgsConstructor;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import shi.raibu.shi.model.Role;
 import shi.raibu.shi.model.User;
 import shi.raibu.shi.repository.UserRepository;
 
 @Service
-@AllArgsConstructor
 @Slf4j
 public class RoleService {
 
   private final UserRepository userRepository;
 
-  // Default admin emails (should be moved to configuration)
-  private static final Set<String> DEFAULT_ADMINS = Set.of("admin@raibu.app", "mathieu@raibu.app");
+  /** Lower-cased admin e-mails parsed from the comma separated ADMIN_EMAILS value. */
+  private final Set<String> adminEmails;
+
+  public RoleService(UserRepository userRepository, @Value("${ADMIN_EMAILS:}") String adminEmails) {
+    this.userRepository = userRepository;
+    this.adminEmails = parseEmails(adminEmails);
+  }
+
+  static Set<String> parseEmails(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return Set.of();
+    }
+    return Arrays.stream(raw.split(","))
+        .map(String::trim)
+        .filter(e -> !e.isEmpty())
+        .map(e -> e.toLowerCase(Locale.ROOT))
+        .collect(Collectors.toUnmodifiableSet());
+  }
 
   public Role getUserRole(String userId) {
     return userRepository.findById(userId).map(this::determineRole).orElse(Role.USER);
@@ -36,8 +54,8 @@ public class RoleService {
   }
 
   private Role determineRole(User user) {
-    // Check if user is a default admin by email
-    if (DEFAULT_ADMINS.contains(user.getEmail())) {
+    if (user.getEmail() != null
+        && adminEmails.contains(user.getEmail().trim().toLowerCase(Locale.ROOT))) {
       return Role.ADMIN;
     }
 
@@ -45,9 +63,5 @@ public class RoleService {
     // For example, checking a user_roles table or flags in the User model
 
     return Role.USER;
-  }
-
-  public Set<String> getAdminEmails() {
-    return DEFAULT_ADMINS;
   }
 }
