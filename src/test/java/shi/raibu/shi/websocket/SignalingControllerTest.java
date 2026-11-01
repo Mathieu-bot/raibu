@@ -28,6 +28,7 @@ import shi.raibu.shi.repository.UserRepository;
 import shi.raibu.shi.service.DirectMessageService;
 import shi.raibu.shi.service.IcebreakerService;
 import shi.raibu.shi.service.MatchmakingService;
+import shi.raibu.shi.websocket.model.ChatInboundMessage;
 import shi.raibu.shi.websocket.model.SignalMessage;
 
 @ExtendWith(MockitoExtension.class)
@@ -72,6 +73,43 @@ class SignalingControllerTest {
 
     verify(matchmakingService, never()).endChat(any());
     verify(matchmakingService, never()).startSearching(any(), any());
+  }
+
+  private ChatInboundMessage chat(String content) {
+    ChatInboundMessage inbound = new ChatInboundMessage();
+    inbound.setTo("bob");
+    inbound.setContent(content);
+    return inbound;
+  }
+
+  private void activeSession() {
+    when(chatSessionRepository.findByUser1IdAndUser2IdAndStatus(
+            "alice", "bob", ChatSession.SessionStatus.ACTIVE))
+        .thenReturn(Optional.of(new ChatSession()));
+  }
+
+  @Test
+  void chatLongerThanLimitIsRejectedWithError() {
+    activeSession();
+
+    controller.sendChatMessage(alice, chat("x".repeat(SignalingController.MAX_CHAT_LENGTH + 1)));
+
+    verify(chatMessageRepository, never()).save(any());
+    ArgumentCaptor<SignalMessage> error = ArgumentCaptor.forClass(SignalMessage.class);
+    verify(messagingTemplate)
+        .convertAndSendToUser(eq("alice"), eq("/queue/match"), error.capture());
+    assertEquals("MESSAGE_TOO_LONG", error.getValue().getData());
+  }
+
+  @Test
+  void chatAtLimitAfterTrimIsAccepted() {
+    activeSession();
+
+    controller.sendChatMessage(
+        alice, chat("  " + "x".repeat(SignalingController.MAX_CHAT_LENGTH) + "  "));
+
+    verify(chatMessageRepository).save(any());
+    verify(messagingTemplate).convertAndSendToUser(eq("bob"), eq("/queue/chat"), any());
   }
 
   @Test
