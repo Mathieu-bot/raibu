@@ -39,12 +39,15 @@ Only a browser navigation (request that explicitly accepts `text/html`, without 
 
 ### CSRF
 
-State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`, including `/logout`) need a CSRF token. See the
-"CSRF cookie" status in section 9 (`Changes in flight`) for whether the readable cookie is already deployed; the intended contract is:
+State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`, including `/logout`) need a CSRF token (double-submit cookie):
 
-- The backend issues a cookie `XSRF-TOKEN` (readable by JavaScript, not HttpOnly) on a plain `GET` such as `GET /me`.
-- Send its value back in the header `X-XSRF-TOKEN` on every `POST`/`PUT`/`DELETE`.
-- A missing or wrong token gives `403` (Spring Security default body).
+- The backend writes a cookie `XSRF-TOKEN` (not HttpOnly, path `/`, same `SameSite`/`Secure` policy as the session cookie) on every response of a
+  signed-in session, so a plain `GET /me` issues it.
+- Send the token value back in the header `X-XSRF-TOKEN` on every `POST`/`PUT`/`DELETE`.
+- **Cross-site frontend:** when the SPA and the API are on different sites, `document.cookie` cannot read the API's cookie. Call
+  `GET {API}/csrf` (session required) once after login (and after any `403 CSRF_INVALID`): it returns
+  `{"headerName":"X-XSRF-TOKEN","parameterName":"_csrf","token":"<value>"}`. Send `token` in `headerName`. Same-site frontends can also read the cookie.
+- A missing or wrong token gives `403` `{"code":"CSRF_INVALID"}`. Other access-denied cases give `403` `{"code":"FORBIDDEN"}`.
 - `/ws/**` (SockJS handshake and STOMP) is exempt from CSRF.
 
 ### Banned users
@@ -68,7 +71,7 @@ Allowed methods `GET, POST, PUT, DELETE, OPTIONS`, all headers, credentials allo
 |---|---|---|
 | Not authenticated | 401 | `{"code":"UNAUTHENTICATED"}` |
 | Banned user | 403 | `{"code":"USER_BANNED"}` |
-| CSRF missing/invalid | 403 | Spring Security default |
+| CSRF missing/invalid | 403 | `{"code":"CSRF_INVALID"}` |
 | Insufficient role (`@RequireRole`) | 403 | `{"timestamp","status":403,"error":"Forbidden","message":"Insufficient permissions"}` |
 | Bad argument / state (`IllegalArgumentException`, `IllegalStateException` from services) | 400 | `{"timestamp","status":400,"error":"Bad Request","message":"<text>"}` |
 | Not found | 404 | usually empty body; `ResourceNotFoundException` gives the JSON shape above |
@@ -349,6 +352,7 @@ positive a random candidate is used. Preferences only bias the choice, they neve
 location.href = `${API}/oauth2/authorization/google`;           // returns to ${FRONTEND_URL}/home
 
 // 1. who am I (also issues the XSRF-TOKEN cookie)
+//    cross-site SPA: const { headerName, token } = await (await fetch(`${API}/csrf`, { credentials: 'include' })).json();
 const me = await (await fetch(`${API}/me`, { credentials: 'include' })).json();
 if (me.banned) return showBanned();
 
@@ -387,7 +391,7 @@ client.send('/app/next', {});
 // 7. feedback for the session that just ended (id from GET /sessions/me, the latest ENDED one)
 await fetch(`${API}/sessions/${sessionId}/feedback`, {
   method: 'POST', credentials: 'include',
-  headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': getCookie('XSRF-TOKEN') },
+  headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfToken }, // csrfToken from GET /csrf
   body: JSON.stringify({ liked: true })
 });
 // mutual likes -> friendship + MATCH_CONFIRMED notification on /user/queue/notifications
@@ -404,7 +408,7 @@ client.send('/app/dm', {}, JSON.stringify({ to: friends[0].userId, content: 'hey
 
 ## 8. Unverified
 
-- Exact JSON of bean-validation `400` errors and of the Spring Security CSRF `403`.
+- Exact JSON of bean-validation `400` errors.
 - Behavior of the SockJS transport when a frame exceeds 64 KB and under Render's idle connection timeout.
 - All flows were read from the code; none were run against a live instance.
 
@@ -415,7 +419,6 @@ These are decided and being merged into `preprod` by other work streams. Until t
 
 | Topic | Today on `preprod` | Target contract |
 |---|---|---|
-| CSRF cookie | Spring default: token kept in the session, **no readable cookie**, so a cross-origin SPA cannot send it | Cookie `XSRF-TOKEN` (not HttpOnly) issued on a plain `GET` (e.g. `/me`), header `X-XSRF-TOKEN` on `POST`/`PUT`/`DELETE`; `/ws/**` exempt |
 | Ban on REST | Only STOMP actions check the ban | `403 {"code":"USER_BANNED"}` on all REST except `GET /me`, `/logout`, `/ping`, `/login/**`, `/oauth2/**` |
 | `/ws/**` auth | Handshake is public; an unauthenticated STOMP client has no principal and its frames are ignored | Handshake requires a session (`401` otherwise) |
 | `GET /reports/pending` | Any signed-in user | Admin only |

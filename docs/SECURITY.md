@@ -81,8 +81,8 @@ real client IP because forwarded headers are honored. REST limiter memory is bou
 
 - CSRF protection is on for all state-changing REST calls (and `/logout`). It is never disabled. `/ws/**` is exempt because browsers cannot attach custom headers to the
   SockJS handshake and the WebSocket origin is checked against `ALLOWED_ORIGINS`.
-- **In flight**: the token is exposed in a readable `XSRF-TOKEN` cookie and expected back in the `X-XSRF-TOKEN` header (see `docs/API.md`). Today Spring's default keeps the token
-  in the session only.
+- Double-submit cookie: the token is written in a readable `XSRF-TOKEN` cookie and expected back in the `X-XSRF-TOKEN` header. A cross-site frontend fetches the value from
+  `GET /csrf` because it cannot read the API's cookie (see `docs/API.md`). Failures return `403 {"code":"CSRF_INVALID"}`.
 - CORS: only the origins in `ALLOWED_ORIGINS` (exact match), credentials allowed, methods `GET POST PUT DELETE OPTIONS`. The same list is the allowed-origin list of the WebSocket
   endpoint. A wrong value shows up as CORS errors or a failing handshake.
 
