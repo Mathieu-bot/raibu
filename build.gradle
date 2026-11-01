@@ -17,8 +17,6 @@ jacoco {
     toolVersion = "0.8.11"
 }
 
-
-
 repositories {
 
     mavenCentral()
@@ -35,8 +33,6 @@ configurations {
         extendsFrom annotationProcessor
     }
 }
-
-
 
 test {
     maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
@@ -126,25 +122,7 @@ dependencies {
 
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.15.3'
 
-    implementation 'com.amazonaws.serverless:aws-serverless-java-container-springboot3:2.1.0'
-    implementation 'software.amazon.awssdk:aws-query-protocol:2.20.26'
-
-    implementation 'com.amazonaws:aws-lambda-java-core:1.2.3'
-    implementation 'com.amazonaws:aws-lambda-java-events:3.11.3'
-    implementation 'software.amazon.awssdk:sqs:2.21.40'
-    implementation 'software.amazon.awssdk:eventbridge:2.21.40'
-    implementation 'software.amazon.awssdk.crt:aws-crt:0.28.12'
-    implementation 'software.amazon.awssdk:ses:2.21.40'
-    implementation 'software.amazon.awssdk:core:2.21.40'
-
-    implementation 'jakarta.mail:jakarta.mail-api:2.1.2'
-    implementation 'jakarta.activation:jakarta.activation-api:2.1.2'
-    implementation 'com.sun.mail:jakarta.mail:2.0.1'
-    implementation 'com.sun.activation:jakarta.activation:2.0.1'
-
     implementation 'org.apache.tika:tika-core:2.9.1'
-
-    implementation 'org.reflections:reflections:0.10.2'
 
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
@@ -162,7 +140,5 @@ dependencies {
     testImplementation 'org.junit-pioneer:junit-pioneer:2.2.0'
     testImplementation 'org.mockito:mockito-core:5.7.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.7.0'
-
-
 
 }

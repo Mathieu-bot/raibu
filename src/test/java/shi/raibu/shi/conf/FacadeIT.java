@@ -18,9 +18,6 @@ public class FacadeIT {
   @DynamicPropertySource
   static void configureProperties(DynamicPropertyRegistry registry) {
 
-    new BucketConf().configureProperties(registry);
-    new EmailConf().configureProperties(registry);
-
     try {
       var envConfClazz = Class.forName("shi.raibu.shi.conf.EnvConf");
       var envConfConfigureProperties =
