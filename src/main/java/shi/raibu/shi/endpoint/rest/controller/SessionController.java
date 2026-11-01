@@ -1,6 +1,8 @@
 package shi.raibu.shi.endpoint.rest.controller;
 
 import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import lombok.AllArgsConstructor;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import shi.raibu.shi.model.ChatMessage;
 import shi.raibu.shi.model.ChatSession;
@@ -27,19 +30,24 @@ public class SessionController {
   private final FeedbackService feedbackService;
 
   @GetMapping("/me")
-  public ResponseEntity<List<ChatSession>> getMySessions(Principal principal) {
+  public ResponseEntity<List<ChatSession>> getMySessions(
+      Principal principal, @RequestParam(required = false) Integer limit) {
     if (principal == null) {
       return ResponseEntity.status(401).build();
     }
 
     String userId = principal.getName();
-    List<ChatSession> sessions = chatSessionRepository.findByUser1IdOrUser2Id(userId, userId);
+    List<ChatSession> sessions =
+        chatSessionRepository.findByUser1IdOrUser2Id(
+            userId, userId, PageLimits.newestFirst(limit, "startedAt"));
     return ResponseEntity.ok(sessions);
   }
 
   @GetMapping("/{sessionId}/messages")
   public ResponseEntity<List<ChatMessage>> getSessionMessages(
-      Principal principal, @PathVariable String sessionId) {
+      Principal principal,
+      @PathVariable String sessionId,
+      @RequestParam(required = false) Integer limit) {
     if (principal == null) {
       return ResponseEntity.status(401).build();
     }
@@ -56,7 +64,12 @@ public class SessionController {
       return ResponseEntity.status(403).build();
     }
 
-    List<ChatMessage> messages = chatMessageRepository.findBySessionIdOrderBySentAtAsc(sessionId);
+    // Newest `limit` messages, returned oldest first.
+    List<ChatMessage> messages =
+        new ArrayList<>(
+            chatMessageRepository.findBySessionId(
+                sessionId, PageLimits.newestFirst(limit, "sentAt")));
+    Collections.reverse(messages);
     return ResponseEntity.ok(messages);
   }
 
