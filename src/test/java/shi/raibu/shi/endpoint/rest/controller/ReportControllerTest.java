@@ -172,6 +172,17 @@ class ReportControllerTest {
   }
 
   @Test
+  void pendingListRequiresTheAdminRole() throws Exception {
+    shi.raibu.shi.security.RequireRole annotation =
+        ReportController.class
+            .getMethod("getPendingReports")
+            .getAnnotation(shi.raibu.shi.security.RequireRole.class);
+    org.junit.jupiter.api.Assertions.assertNotNull(annotation);
+    org.junit.jupiter.api.Assertions.assertEquals(
+        shi.raibu.shi.model.Role.ADMIN, annotation.value());
+  }
+
+  @Test
   void reportedUserIdIsRequired() throws Exception {
     mockMvc.perform(report("{\"reason\":\"SPAM\"}")).andExpect(status().isBadRequest());
   }

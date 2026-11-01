@@ -23,9 +23,11 @@ import org.springframework.web.server.ResponseStatusException;
 import shi.raibu.shi.endpoint.rest.dto.CreateReportDto;
 import shi.raibu.shi.model.ChatSession;
 import shi.raibu.shi.model.Report;
+import shi.raibu.shi.model.Role;
 import shi.raibu.shi.repository.ChatSessionRepository;
 import shi.raibu.shi.repository.ReportRepository;
 import shi.raibu.shi.repository.UserRepository;
+import shi.raibu.shi.security.RequireRole;
 
 @RestController
 @RequestMapping("/reports")
@@ -122,6 +124,7 @@ public class ReportController {
             responseCode = "200",
             description = "List of pending reports retrieved successfully")
       })
+  @RequireRole(Role.ADMIN)
   public ResponseEntity<List<Report>> getPendingReports() {
     return ResponseEntity.ok(reportRepository.findByStatus(Report.ReportStatus.PENDING));
   }
