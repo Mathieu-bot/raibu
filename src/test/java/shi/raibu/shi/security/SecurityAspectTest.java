@@ -51,7 +51,7 @@ class SecurityAspectTest {
 
     @Bean
     RoleService roleService(UserRepository repo) {
-      return new RoleService(repo);
+      return new RoleService(repo, "admin@raibu.app");
     }
 
     @Bean

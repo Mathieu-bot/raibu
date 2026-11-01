@@ -24,7 +24,7 @@ class AdminSecurityTest {
 
   @BeforeEach
   void setUp() {
-    roleService = new RoleService(userRepository);
+    roleService = new RoleService(userRepository, "admin@raibu.app, Mathieu@Raibu.app ,,");
   }
 
   @Nested
@@ -91,27 +91,41 @@ class AdminSecurityTest {
   }
 
   @Nested
-  @DisplayName("Default admin configuration")
-  class DefaultAdminConfigurationTests {
+  @DisplayName("ADMIN_EMAILS parsing")
+  class AdminEmailsTests {
 
-    @Test
-    @DisplayName("should include mathieu@raibu.app as default admin")
-    void shouldIncludeMathieuAsDefaultAdmin() {
-      User mathieuUser = User.builder().id("mathieu-1").email("mathieu@raibu.app").build();
-
-      when(userRepository.findById("mathieu-1")).thenReturn(Optional.of(mathieuUser));
-
-      assertTrue(roleService.isAdmin("mathieu-1"));
+    private boolean adminWith(String config, String email) {
+      RoleService service = new RoleService(userRepository, config);
+      when(userRepository.findById("u"))
+          .thenReturn(Optional.of(User.builder().id("u").email(email).build()));
+      return service.isAdmin("u");
     }
 
     @Test
-    @DisplayName("should provide list of admin emails")
-    void shouldProvideListOfAdminEmails() {
-      var adminEmails = roleService.getAdminEmails();
+    void emptyConfigurationMeansNobodyIsAdmin() {
+      assertFalse(adminWith("", "admin@raibu.app"));
+      assertFalse(adminWith(null, "admin@raibu.app"));
+      assertFalse(adminWith(" , ", "admin@raibu.app"));
+    }
 
-      assertTrue(adminEmails.contains("admin@raibu.app"));
-      assertTrue(adminEmails.contains("mathieu@raibu.app"));
-      assertEquals(2, adminEmails.size());
+    @Test
+    void singleEmailIsAdmin() {
+      assertTrue(adminWith("boss@example.com", "boss@example.com"));
+      assertFalse(adminWith("boss@example.com", "other@example.com"));
+    }
+
+    @Test
+    void severalEmailsWithSpacesAndMixedCase() {
+      String config = " Boss@Example.com , second@example.com,, THIRD@example.com ";
+      assertTrue(adminWith(config, "boss@example.com"));
+      assertTrue(adminWith(config, "Second@Example.com"));
+      assertTrue(adminWith(config, "third@example.com"));
+      assertFalse(adminWith(config, "fourth@example.com"));
+    }
+
+    @Test
+    void noEmailIsNeverAdmin() {
+      assertFalse(adminWith("boss@example.com", null));
     }
   }
 }
