@@ -320,7 +320,10 @@ public class SignalingController {
       return;
     }
 
+    String mode = userRepository.findById(userId).map(User::getSearchMode).orElse(null);
+
     matchmakingService.endChat(userId);
+    matchmakingService.startSearching(userId, mode);
 
     handleMatchForUser(userId);
   }
