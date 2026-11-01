@@ -23,6 +23,7 @@ class SecurityConfigTest {
 
   @Autowired MockMvc mvc;
   @MockBean CustomOidcUserService customOidcUserService;
+  @MockBean shi.raibu.shi.repository.UserRepository userRepository;
 
   @Test
   void jsonRequestWithoutSessionGets401() throws Exception {

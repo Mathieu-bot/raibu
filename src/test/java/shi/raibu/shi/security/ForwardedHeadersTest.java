@@ -24,6 +24,7 @@ class ForwardedHeadersTest {
 
   @LocalServerPort int port;
   @MockBean CustomOidcUserService customOidcUserService;
+  @MockBean shi.raibu.shi.repository.UserRepository userRepository;
 
   private String redirectUriSentToGoogle(boolean behindProxy) throws Exception {
     HttpRequest.Builder request =

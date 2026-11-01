@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -33,6 +34,7 @@ import org.springframework.web.accept.HeaderContentNegotiationStrategy;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import shi.raibu.shi.repository.UserRepository;
 
 @Configuration
 @EnableWebSecurity
@@ -40,6 +42,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
   private final CustomOidcUserService customOidcUserService;
+  private final UserRepository userRepository;
 
   @Value("${app.frontend-url}")
   private String frontendUrl;
@@ -63,6 +66,7 @@ public class SecurityConfig {
                     .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
                     .ignoringRequestMatchers("/ws/**"))
         .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+        .addFilterBefore(new BannedUserFilter(userRepository), AuthorizationFilter.class)
         .authorizeHttpRequests(
             auth -> auth.requestMatchers("/ping").permitAll().anyRequest().authenticated())
         .exceptionHandling(

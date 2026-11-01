@@ -31,6 +31,7 @@ class CsrfTest {
 
   @Autowired MockMvc mvc;
   @MockBean CustomOidcUserService customOidcUserService;
+  @MockBean shi.raibu.shi.repository.UserRepository userRepository;
 
   static MockHttpSession loggedInSession(String userId) {
     SecurityContext context = new SecurityContextImpl();
