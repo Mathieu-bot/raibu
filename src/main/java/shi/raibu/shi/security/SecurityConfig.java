@@ -14,8 +14,13 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
@@ -23,6 +28,7 @@ import org.springframework.security.web.util.matcher.NegatedRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.util.StringUtils;
 import org.springframework.web.accept.HeaderContentNegotiationStrategy;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -41,17 +47,32 @@ public class SecurityConfig {
   @Value("${cors.allowed-origins}")
   private String allowedOrigins;
 
+  /**
+   * Same SameSite policy as the session cookie (set in the prod profile), empty = browser default.
+   */
+  @Value("${server.servlet.session.cookie.same-site:}")
+  private String sameSite;
+
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
-        .csrf(csrf -> csrf.ignoringRequestMatchers("/ws/**"))
+        .csrf(
+            csrf ->
+                csrf.csrfTokenRepository(csrfTokenRepository())
+                    // plain handler (no BREACH masking): the SPA sends the cookie value back as is
+                    .csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
+                    .ignoringRequestMatchers("/ws/**"))
+        .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
         .authorizeHttpRequests(
             auth ->
                 auth.requestMatchers("/ping", "/actuator/**", "/ws/**")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint()))
+        .exceptionHandling(
+            ex ->
+                ex.authenticationEntryPoint(authenticationEntryPoint())
+                    .accessDeniedHandler(accessDeniedHandler()))
         .oauth2Login(
             oauth2 ->
                 oauth2
@@ -60,6 +81,25 @@ public class SecurityConfig {
         .logout(logout -> logout.logoutUrl("/logout").logoutSuccessUrl(frontendUrl + "/login"));
 
     return http.build();
+  }
+
+  /** XSRF-TOKEN cookie readable by JavaScript; the SPA echoes it in the X-XSRF-TOKEN header. */
+  private CookieCsrfTokenRepository csrfTokenRepository() {
+    CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+    repository.setCookiePath("/");
+    if (StringUtils.hasText(sameSite)) {
+      repository.setCookieCustomizer(cookie -> cookie.sameSite(sameSite));
+    }
+    return repository;
+  }
+
+  private AccessDeniedHandler accessDeniedHandler() {
+    return (request, response, accessDeniedException) -> {
+      response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+      String code = accessDeniedException instanceof CsrfException ? "CSRF_INVALID" : "FORBIDDEN";
+      response.getWriter().write("{\"code\":\"" + code + "\"}");
+    };
   }
 
   /**

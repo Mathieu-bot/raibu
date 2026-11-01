@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
       JpaRepositoriesAutoConfiguration.class,
       FlywayAutoConfiguration.class
     })
-@Import({SecurityConfig.class, SecurityTestApp.Probe.class})
+@Import({SecurityConfig.class, CsrfController.class, SecurityTestApp.Probe.class})
 class SecurityTestApp {
 
   @RestController
