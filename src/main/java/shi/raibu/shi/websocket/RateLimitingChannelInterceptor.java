@@ -4,6 +4,7 @@ import java.security.Principal;
 import java.time.Clock;
 import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -36,6 +37,7 @@ public class RateLimitingChannelInterceptor implements ChannelInterceptor {
     int count;
   }
 
+  @Autowired
   public RateLimitingChannelInterceptor(@Lazy SimpMessagingTemplate messagingTemplate) {
     this(messagingTemplate, Clock.systemUTC());
   }
